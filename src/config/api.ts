@@ -5,5 +5,7 @@ function normalizeBaseUrl(url: string): string {
 }
 
 export const SERVER_URL = normalizeBaseUrl(
-  rawApiUrl && rawApiUrl.length > 0 ? rawApiUrl : 'http://127.0.0.1:3001'
+  rawApiUrl && rawApiUrl.length > 0
+    ? rawApiUrl
+    : 'https://pingpong-star-server.onrender.com'
 );

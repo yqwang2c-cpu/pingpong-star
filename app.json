@@ -2,6 +2,7 @@
   "expo": {
     "name": "pingpong-star",
     "slug": "pingpong-star",
+    "owner": "yqwang2c",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,11 @@
       }
     },
     "android": {
-      "permissions": ["CAMERA", "RECORD_AUDIO"],
+      "package": "com.yqwang2c.pingpongstar",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,6 +30,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "acc6acef-f13b-4fb6-8056-bbd68da33668"
+      }
     }
   }
 }
