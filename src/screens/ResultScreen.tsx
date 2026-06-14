@@ -32,11 +32,41 @@ interface AnalysisResult {
   improvements: string[];
 }
 
+function inferVideoMimeType(filename: string): string {
+  const extension = filename.split('.').pop()?.toLowerCase();
+
+  switch (extension) {
+    case 'mp4':
+    case 'm4v':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'webm':
+      return 'video/webm';
+    case 'avi':
+      return 'video/x-msvideo';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+function getReadableErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    if (error.message.includes('Network request failed')) {
+      return '网络请求失败，请确认手机网络正常且可以访问服务器';
+    }
+    return error.message;
+  }
+
+  return '分析失败，请稍后重试';
+}
+
 
 export default function ResultScreen({ navigation, route }: Props) {
   const { videoUri, playerName } = route.params;
   const [uploadState, setUploadState] = useState<UploadState>('uploading');
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     uploadVideo(videoUri);
@@ -56,33 +86,54 @@ export default function ResultScreen({ navigation, route }: Props) {
 
   async function uploadVideo(uri: string) {
     try {
+      setUploadState('uploading');
+      setErrorMessage('');
+
       const filename = uri.split('/').pop() ?? 'video.mov';
       const formData = new FormData();
       formData.append('video', {
         uri,
         name: filename,
-        type: 'video/mp4',
+        type: inferVideoMimeType(filename),
       } as unknown as Blob);
 
       const response = await fetch(`${SERVER_URL}/api/analyze`, {
         method: 'POST',
         body: formData,
-        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: Record<string, unknown> | null = null;
+
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText) as Record<string, unknown>;
+        } catch {
+          if (!response.ok) {
+            throw new Error(responseText);
+          }
+          throw new Error('服务器返回了无法识别的分析结果');
+        }
+      }
+
+      if (!response.ok) {
+        const serverError =
+          typeof data?.error === 'string' ? data.error : `服务器返回错误（${response.status}）`;
+        throw new Error(serverError);
+      }
+
       const analysisResult: AnalysisResult = {
-        frames: data.frames ?? [],
-        score: typeof data.score === 'number' ? data.score : 0,
-        strengths: Array.isArray(data.strengths) ? data.strengths : [],
-        improvements: Array.isArray(data.improvements) ? data.improvements : [],
+        frames: Array.isArray(data?.frames) ? (data.frames as string[]) : [],
+        score: typeof data?.score === 'number' ? data.score : 0,
+        strengths: Array.isArray(data?.strengths) ? (data.strengths as string[]) : [],
+        improvements: Array.isArray(data?.improvements) ? (data.improvements as string[]) : [],
       };
       setResult(analysisResult);
       setUploadState('done');
       await saveScore(analysisResult.score);
     } catch (e) {
       console.error('上传或分析失败:', e);
+      setErrorMessage(getReadableErrorMessage(e));
       setUploadState('error');
     }
   }
@@ -122,7 +173,7 @@ export default function ResultScreen({ navigation, route }: Props) {
         <View style={styles.centered}>
           <Text style={{ fontSize: 40 }}>😢</Text>
           <Text style={[styles.uploadingText, { color: '#c62828', textAlign: 'center' }]}>
-            分析失败，请检查网络或重新录像
+            {errorMessage || '分析失败，请检查网络或重新录像'}
           </Text>
           <TouchableOpacity style={styles.recordAgainButton} onPress={() => navigation.navigate('Record', { playerName })}>
             <Text style={styles.recordAgainText}>🎥 重新录像</Text>

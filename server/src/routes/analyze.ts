@@ -37,6 +37,63 @@ const upload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
+function getUploadErrorResponse(err: unknown): { statusCode: number; message: string } {
+  if (err instanceof multer.MulterError) {
+    switch (err.code) {
+      case 'LIMIT_FILE_SIZE':
+        return {
+          statusCode: 413,
+          message: '视频文件过大，当前最大支持 200MB，请压缩后重试',
+        };
+      case 'LIMIT_UNEXPECTED_FILE':
+        return {
+          statusCode: 400,
+          message: '上传失败，请确认表单字段名为 video',
+        };
+      default:
+        return {
+          statusCode: 400,
+          message: '视频上传失败，请更换文件后重试',
+        };
+    }
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+
+  if (message.includes('Invalid data found when processing input')) {
+    return {
+      statusCode: 400,
+      message: '无法识别该视频格式，请上传 mp4、mov 等常见视频文件',
+    };
+  }
+
+  if (message.includes('No such file or directory')) {
+    return {
+      statusCode: 400,
+      message: '上传的视频文件不存在或已损坏，请重新选择后重试',
+    };
+  }
+
+  if (message.includes('DASHSCOPE_API_KEY 未配置')) {
+    return {
+      statusCode: 503,
+      message: '服务器分析能力暂不可用，请稍后再试',
+    };
+  }
+
+  if (message.includes('无法从 Qwen 响应中提取 JSON')) {
+    return {
+      statusCode: 502,
+      message: '分析服务返回异常，请稍后重试',
+    };
+  }
+
+  return {
+    statusCode: 500,
+    message: '服务器分析失败，请稍后重试',
+  };
+}
+
 const COACHING_PROMPT = `你是严格的乒乓球专业教练，正在评估一段小学生练球视频的截图序列。你的评分标准极为严格，目的是帮助孩子找到真实不足。
 
 ## 评分维度（每项 0-25 分）
@@ -122,34 +179,42 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   };
 }
 
-router.post('/', upload.single('video'), async (req: Request, res: Response): Promise<void> => {
-  if (!req.file) {
-    res.status(400).json({ error: '没有收到视频文件，请确认字段名为 video' });
-    return;
-  }
+router.post('/', (req: Request, res: Response): void => {
+  upload.single('video')(req, res, async (uploadErr: unknown) => {
+    if (uploadErr) {
+      console.error('上传失败:', uploadErr);
+      const { statusCode, message } = getUploadErrorResponse(uploadErr);
+      res.status(statusCode).json({ error: message });
+      return;
+    }
 
-  const videoPath = req.file.path;
-  const outputPrefix = `frames_${Date.now()}`;
+    if (!req.file) {
+      res.status(400).json({ error: '没有收到视频文件，请确认字段名为 video' });
+      return;
+    }
 
-  console.log(`📹 收到视频: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
+    const videoPath = req.file.path;
+    const outputPrefix = `frames_${Date.now()}`;
 
-  try {
-    const frames = await extractFrames(videoPath, outputPrefix);
-    console.log(`🖼️  抽帧完成: ${frames.length} 张，开始 Qwen-VL 分析…`);
+    console.log(`📹 收到视频: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
 
-    const framesDir = path.join(__dirname, '../../frames');
-    const framePaths = frames.map((f) => path.join(framesDir, path.basename(f)));
+    try {
+      const frames = await extractFrames(videoPath, outputPrefix);
+      console.log(`🖼️  抽帧完成: ${frames.length} 张，开始 Qwen-VL 分析…`);
 
-    const analysis = await analyzeWithQwen(framePaths);
-    console.log(`✅ 分析完成: 得分 ${analysis.score}`);
+      const framesDir = path.join(__dirname, '../../frames');
+      const framePaths = frames.map((f) => path.join(framesDir, path.basename(f)));
 
-    res.json({ status: 'ok', frames, ...analysis });
-  } catch (err) {
-    console.error('分析失败:', err);
-    const message = err instanceof Error ? err.message : String(err);
-    const statusCode = message.includes('DASHSCOPE_API_KEY 未配置') ? 503 : 500;
-    res.status(statusCode).json({ error: '分析失败: ' + message });
-  }
+      const analysis = await analyzeWithQwen(framePaths);
+      console.log(`✅ 分析完成: 得分 ${analysis.score}`);
+
+      res.json({ status: 'ok', frames, ...analysis });
+    } catch (err) {
+      console.error('分析失败:', err);
+      const { statusCode, message } = getUploadErrorResponse(err);
+      res.status(statusCode).json({ error: message });
+    }
+  });
 });
 
 export default router;
