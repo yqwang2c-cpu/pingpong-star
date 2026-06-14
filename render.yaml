@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: pingpong-star-server
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DASHSCOPE_API_KEY
+        sync: false
