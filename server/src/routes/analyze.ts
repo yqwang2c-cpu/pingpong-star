@@ -8,11 +8,18 @@ import { extractFrames } from '../utils/ffmpeg';
 
 const router = Router();
 
-// 通义千问 Qwen-VL，OpenAI 兼容接口
-const client = new OpenAI({
-  apiKey: process.env.DASHSCOPE_API_KEY,
-  baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-});
+function getClient(): OpenAI {
+  const apiKey = process.env.DASHSCOPE_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('DASHSCOPE_API_KEY 未配置');
+  }
+
+  // 通义千问 Qwen-VL，OpenAI 兼容接口
+  return new OpenAI({
+    apiKey,
+    baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  });
+}
 
 const UPLOADS_DIR = path.join(__dirname, '../../uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -76,6 +83,7 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   strengths: string[];
   improvements: string[];
 }> {
+  const client = getClient();
   type ImageUrlContent = { type: 'image_url'; image_url: { url: string } };
   type TextContent = { type: 'text'; text: string };
   type ContentItem = ImageUrlContent | TextContent;
@@ -138,7 +146,9 @@ router.post('/', upload.single('video'), async (req: Request, res: Response): Pr
     res.json({ status: 'ok', frames, ...analysis });
   } catch (err) {
     console.error('分析失败:', err);
-    res.status(500).json({ error: '分析失败: ' + String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    const statusCode = message.includes('DASHSCOPE_API_KEY 未配置') ? 503 : 500;
+    res.status(statusCode).json({ error: '分析失败: ' + message });
   }
 });
 
