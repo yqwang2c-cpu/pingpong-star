@@ -10,6 +10,7 @@ import {
   cropImageAroundPoint,
   extractFrames,
   getMediaDimensions,
+  getMediaInfo,
 } from '../utils/ffmpeg';
 
 const router = Router();
@@ -42,6 +43,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 },
 });
+const MAX_VIDEO_DURATION_SECONDS = 10;
 
 interface AnalyzeSession {
   id: string;
@@ -166,6 +168,13 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
     };
   }
 
+  if (message.includes('视频时长超过 10 秒')) {
+    return {
+      statusCode: 400,
+      message: '视频时长不能超过 10 秒，请重新录制或裁剪后再试',
+    };
+  }
+
   if (message.includes('DASHSCOPE_API_KEY 未配置')) {
     return {
       statusCode: 503,
@@ -284,6 +293,13 @@ function getFramePaths(frameNames: string[]): string[] {
   return frameNames.map((frameName) => path.join(FRAMES_DIR, path.basename(frameName)));
 }
 
+async function validateVideoDuration(videoPath: string): Promise<void> {
+  const mediaInfo = await getMediaInfo(videoPath);
+  if (mediaInfo.durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
+    throw new Error('视频时长超过 10 秒');
+  }
+}
+
 router.post('/session', (req: Request, res: Response): void => {
   cleanupExpiredSessions();
 
@@ -304,6 +320,7 @@ router.post('/session', (req: Request, res: Response): void => {
     let extractedFramePaths: string[] = [];
 
     try {
+      await validateVideoDuration(videoPath);
       const outputPrefix = `frames_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const frames = await extractFrames(videoPath, outputPrefix);
       extractedFramePaths = getFramePaths(frames);
@@ -397,6 +414,7 @@ router.post('/', (req: Request, res: Response): void => {
     console.log(`📹 收到视频: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
 
     try {
+      await validateVideoDuration(videoPath);
       const frames = await extractFrames(videoPath, outputPrefix);
       console.log(`🖼️  抽帧完成: ${frames.length} 张，开始 Qwen-VL 分析…`);
 

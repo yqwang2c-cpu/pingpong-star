@@ -1,9 +1,17 @@
 import * as ImagePicker from 'expo-image-picker';
 
+export const MAX_VIDEO_DURATION_SECONDS = 10;
+export const MAX_VIDEO_DURATION_MS = MAX_VIDEO_DURATION_SECONDS * 1000;
+
 type PickVideoResult =
   | { status: 'picked'; asset: ImagePicker.ImagePickerAsset }
+  | { status: 'too_long'; durationMs: number }
   | { status: 'cancelled' }
   | { status: 'permission_denied' };
+
+export function getVideoDurationLimitMessage(): string {
+  return `视频时长不能超过 ${MAX_VIDEO_DURATION_SECONDS} 秒，请重新选择`;
+}
 
 export function inferVideoMimeType(filename: string): string {
   const extension = filename.split('.').pop()?.toLowerCase();
@@ -37,6 +45,11 @@ export async function pickVideoFromLibrary(): Promise<PickVideoResult> {
 
   if (picked.canceled || !picked.assets[0]) {
     return { status: 'cancelled' };
+  }
+
+  const durationMs = picked.assets[0].duration ?? 0;
+  if (durationMs > MAX_VIDEO_DURATION_MS) {
+    return { status: 'too_long', durationMs };
   }
 
   return { status: 'picked', asset: picked.assets[0] };

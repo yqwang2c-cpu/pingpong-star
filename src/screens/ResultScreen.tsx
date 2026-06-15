@@ -11,7 +11,7 @@ import {
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
-import { pickVideoFromLibrary } from '../utils/video';
+import { getVideoDurationLimitMessage, pickVideoFromLibrary } from '../utils/video';
 
 type ResultNavProp = StackNavigationProp<RootStackParamList, 'Result'>;
 type ResultRouteProp = RouteProp<RootStackParamList, 'Result'>;
@@ -30,6 +30,11 @@ export default function ResultScreen({ navigation, route }: Props) {
     const picked = await pickVideoFromLibrary();
     if (picked.status === 'permission_denied') {
       Alert.alert('需要权限', '请在设置中允许访问相册');
+      return;
+    }
+
+    if (picked.status === 'too_long') {
+      Alert.alert('视频太长', getVideoDurationLimitMessage());
       return;
     }
 

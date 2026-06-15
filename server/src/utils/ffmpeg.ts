@@ -14,6 +14,12 @@ export interface MediaDimensions {
   height: number;
 }
 
+export interface MediaInfo {
+  width: number;
+  height: number;
+  durationSeconds: number;
+}
+
 function ensureFramesDir() {
   if (!fs.existsSync(FRAMES_DIR)) {
     fs.mkdirSync(FRAMES_DIR, { recursive: true });
@@ -64,6 +70,33 @@ export function getMediaDimensions(filePath: string): Promise<MediaDimensions> {
       }
 
       resolve({ width: stream.width, height: stream.height });
+    });
+  });
+}
+
+export function getMediaInfo(filePath: string): Promise<MediaInfo> {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      const stream = metadata.streams.find((item) => item.width && item.height);
+      if (!stream?.width || !stream?.height) {
+        reject(new Error('无法识别媒体尺寸'));
+        return;
+      }
+
+      const durationFromFormat = Number(metadata.format?.duration ?? 0);
+      const durationFromStream = Number((stream as { duration?: number | string }).duration ?? 0);
+      const durationSeconds = durationFromFormat > 0 ? durationFromFormat : durationFromStream;
+
+      resolve({
+        width: stream.width,
+        height: stream.height,
+        durationSeconds,
+      });
     });
   });
 }

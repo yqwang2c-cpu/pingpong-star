@@ -16,7 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { SERVER_URL } from '../config/api';
-import { pickVideoFromLibrary } from '../utils/video';
+import { getVideoDurationLimitMessage, pickVideoFromLibrary } from '../utils/video';
 
 type HomeNavProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -83,6 +83,11 @@ export default function HomeScreen({ navigation }: Props) {
     const picked = await pickVideoFromLibrary();
     if (picked.status === 'permission_denied') {
       Alert.alert('需要权限', '请在设置中允许访问相册');
+      return;
+    }
+
+    if (picked.status === 'too_long') {
+      Alert.alert('视频太长', getVideoDurationLimitMessage());
       return;
     }
 

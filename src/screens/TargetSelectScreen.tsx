@@ -16,7 +16,11 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
 import type { AnalysisResult, AnalyzeSessionPreview } from '../types/analysis';
 import { SERVER_URL } from '../config/api';
-import { inferVideoMimeType, pickVideoFromLibrary } from '../utils/video';
+import {
+  getVideoDurationLimitMessage,
+  inferVideoMimeType,
+  pickVideoFromLibrary,
+} from '../utils/video';
 
 type TargetSelectNavProp = StackNavigationProp<RootStackParamList, 'TargetSelect'>;
 type TargetSelectRouteProp = RouteProp<RootStackParamList, 'TargetSelect'>;
@@ -209,6 +213,11 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     const picked = await pickVideoFromLibrary();
     if (picked.status === 'permission_denied') {
       Alert.alert('需要权限', '请在设置中允许访问相册');
+      return;
+    }
+
+    if (picked.status === 'too_long') {
+      Alert.alert('视频太长', getVideoDurationLimitMessage());
       return;
     }
 

@@ -11,6 +11,7 @@ import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
+import { MAX_VIDEO_DURATION_SECONDS } from '../utils/video';
 
 type RecordNavProp = StackNavigationProp<RootStackParamList, 'Record'>;
 type RecordRouteProp = RouteProp<RootStackParamList, 'Record'>;
@@ -51,7 +52,7 @@ export default function RecordScreen({ navigation, route }: Props) {
 
     // recordAsync() 的 Promise 在 stopRecording() 被调用后 resolve
     cameraRef.current
-      ?.recordAsync({ maxDuration: 60 })
+      ?.recordAsync({ maxDuration: MAX_VIDEO_DURATION_SECONDS })
       .then(result => {
         if (timerRef.current) clearInterval(timerRef.current);
         if (result) {
@@ -128,7 +129,9 @@ export default function RecordScreen({ navigation, route }: Props) {
           <>
             <View style={styles.timerRow}>
               <View style={styles.blinkDot} />
-              <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
+              <Text style={styles.timerText}>
+                {formatTime(elapsed)} / 00:10
+              </Text>
             </View>
             <TouchableOpacity style={styles.stopButton} onPress={handleStopRecording}>
               <Text style={styles.stopIcon}>⏹</Text>
@@ -139,7 +142,7 @@ export default function RecordScreen({ navigation, route }: Props) {
 
         {recordState === 'stopped' && (
           <>
-            <Text style={styles.doneText}>✅ 录像完成 {formatTime(elapsed)}</Text>
+            <Text style={styles.doneText}>✅ 录像完成 {formatTime(elapsed)} / 00:10</Text>
             <TouchableOpacity style={styles.analyzeButton} onPress={handleStartAnalysis}>
               <Text style={styles.analyzeText}>📊 开始分析</Text>
             </TouchableOpacity>
