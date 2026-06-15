@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 import HomeScreen from './src/screens/HomeScreen';
 import RecordScreen from './src/screens/RecordScreen';
+import TargetSelectScreen from './src/screens/TargetSelectScreen';
 import ResultScreen from './src/screens/ResultScreen';
 import type { RootStackParamList } from './src/types/navigation';
 
@@ -17,6 +18,7 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Record" component={RecordScreen} />
+        <Stack.Screen name="TargetSelect" component={TargetSelectScreen} />
         <Stack.Screen name="Result" component={ResultScreen} />
       </Stack.Navigator>
     </NavigationContainer>

@@ -13,10 +13,10 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { SERVER_URL } from '../config/api';
+import { pickVideoFromLibrary } from '../utils/video';
 
 type HomeNavProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -80,20 +80,14 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   async function pickAndAnalyzeVideo(playerName: string) {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const picked = await pickVideoFromLibrary();
+    if (picked.status === 'permission_denied') {
       Alert.alert('需要权限', '请在设置中允许访问相册');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      navigation.navigate('Result', { videoUri: result.assets[0].uri, playerName });
+    if (picked.status === 'picked') {
+      navigation.navigate('TargetSelect', { videoUri: picked.asset.uri, playerName });
     }
   }
 

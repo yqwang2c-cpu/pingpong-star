@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,12 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
-import { SERVER_URL } from '../config/api';
+import { pickVideoFromLibrary } from '../utils/video';
 
 type ResultNavProp = StackNavigationProp<RootStackParamList, 'Result'>;
 type ResultRouteProp = RouteProp<RootStackParamList, 'Result'>;
@@ -23,164 +21,21 @@ interface Props {
   route: ResultRouteProp;
 }
 
-type UploadState = 'uploading' | 'done' | 'error';
-
-interface AnalysisResult {
-  frames: string[];
-  score: number;
-  strengths: string[];
-  improvements: string[];
-}
-
-function inferVideoMimeType(filename: string): string {
-  const extension = filename.split('.').pop()?.toLowerCase();
-
-  switch (extension) {
-    case 'mp4':
-    case 'm4v':
-      return 'video/mp4';
-    case 'mov':
-      return 'video/quicktime';
-    case 'webm':
-      return 'video/webm';
-    case 'avi':
-      return 'video/x-msvideo';
-    default:
-      return 'application/octet-stream';
-  }
-}
-
-function getReadableErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.message.includes('Network request failed')) {
-      return '网络请求失败，请确认手机网络正常且可以访问服务器';
-    }
-    return error.message;
-  }
-
-  return '分析失败，请稍后重试';
-}
-
-
 export default function ResultScreen({ navigation, route }: Props) {
-  const { videoUri, playerName } = route.params;
-  const [uploadState, setUploadState] = useState<UploadState>('uploading');
-  const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    uploadVideo(videoUri);
-  }, [videoUri]);
-
-  async function saveScore(score: number) {
-    try {
-      await fetch(`${SERVER_URL}/api/scores`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: playerName, score }),
-      });
-    } catch {
-      // 离线时忽略，不影响结果展示
-    }
-  }
-
-  async function uploadVideo(uri: string) {
-    try {
-      setUploadState('uploading');
-      setErrorMessage('');
-
-      const filename = uri.split('/').pop() ?? 'video.mov';
-      const formData = new FormData();
-      formData.append('video', {
-        uri,
-        name: filename,
-        type: inferVideoMimeType(filename),
-      } as unknown as Blob);
-
-      const response = await fetch(`${SERVER_URL}/api/analyze`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const responseText = await response.text();
-      let data: Record<string, unknown> | null = null;
-
-      if (responseText) {
-        try {
-          data = JSON.parse(responseText) as Record<string, unknown>;
-        } catch {
-          if (!response.ok) {
-            throw new Error(responseText);
-          }
-          throw new Error('服务器返回了无法识别的分析结果');
-        }
-      }
-
-      if (!response.ok) {
-        const serverError =
-          typeof data?.error === 'string' ? data.error : `服务器返回错误（${response.status}）`;
-        throw new Error(serverError);
-      }
-
-      const analysisResult: AnalysisResult = {
-        frames: Array.isArray(data?.frames) ? (data.frames as string[]) : [],
-        score: typeof data?.score === 'number' ? data.score : 0,
-        strengths: Array.isArray(data?.strengths) ? (data.strengths as string[]) : [],
-        improvements: Array.isArray(data?.improvements) ? (data.improvements as string[]) : [],
-      };
-      setResult(analysisResult);
-      setUploadState('done');
-      await saveScore(analysisResult.score);
-    } catch (e) {
-      console.error('上传或分析失败:', e);
-      setErrorMessage(getReadableErrorMessage(e));
-      setUploadState('error');
-    }
-  }
+  const { playerName, result } = route.params;
 
   const isTopFive = result ? result.score >= 73 : false;
 
   async function pickAndUpload() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    const picked = await pickVideoFromLibrary();
+    if (picked.status === 'permission_denied') {
       Alert.alert('需要权限', '请在设置中允许访问相册');
       return;
     }
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: false,
-      quality: 1,
-    });
-    if (!picked.canceled && picked.assets[0]) {
-      navigation.replace('Result', { videoUri: picked.assets[0].uri, playerName });
+
+    if (picked.status === 'picked') {
+      navigation.replace('TargetSelect', { videoUri: picked.asset.uri, playerName });
     }
-  }
-
-  if (uploadState === 'uploading') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3F51B5" />
-          <Text style={styles.uploadingText}>正在上传视频并分析中…</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (uploadState === 'error') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.centered}>
-          <Text style={{ fontSize: 40 }}>😢</Text>
-          <Text style={[styles.uploadingText, { color: '#c62828', textAlign: 'center' }]}>
-            {errorMessage || '分析失败，请检查网络或重新录像'}
-          </Text>
-          <TouchableOpacity style={styles.recordAgainButton} onPress={() => navigation.navigate('Record', { playerName })}>
-            <Text style={styles.recordAgainText}>🎥 重新录像</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
   }
 
   return (

@@ -70,8 +70,8 @@ export default function RecordScreen({ navigation, route }: Props) {
   }, []);
   const handleStartAnalysis = useCallback(() => {
     if (!videoUri) return;
-    navigation.navigate('Result', { videoUri, playerName });
-  }, [videoUri, navigation]);
+    navigation.navigate('TargetSelect', { videoUri, playerName });
+  }, [playerName, videoUri, navigation]);
 
   // 权限检查
   if (!cameraPermission || !micPermission) {

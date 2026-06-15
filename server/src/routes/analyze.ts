@@ -1,10 +1,16 @@
 import 'dotenv/config';
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import OpenAI from 'openai';
-import { extractFrames } from '../utils/ffmpeg';
+import {
+  FRAMES_DIR,
+  cropImageAroundPoint,
+  extractFrames,
+  getMediaDimensions,
+} from '../utils/ffmpeg';
 
 const router = Router();
 
@@ -36,6 +42,64 @@ const upload = multer({
   storage,
   limits: { fileSize: 200 * 1024 * 1024 },
 });
+
+interface AnalyzeSession {
+  id: string;
+  createdAt: number;
+  videoPath: string;
+  framePaths: string[];
+  previewPath: string;
+}
+
+const SESSION_TTL_MS = 30 * 60 * 1000;
+const sessions = new Map<string, AnalyzeSession>();
+
+function deleteFileIfExists(filePath: string) {
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+}
+
+function cleanupSession(session: AnalyzeSession) {
+  deleteFileIfExists(session.videoPath);
+  session.framePaths.forEach(deleteFileIfExists);
+  sessions.delete(session.id);
+}
+
+function cleanupExpiredSessions() {
+  const now = Date.now();
+  for (const session of sessions.values()) {
+    if (now - session.createdAt > SESSION_TTL_MS) {
+      cleanupSession(session);
+    }
+  }
+}
+
+function createSession(videoPath: string, framePaths: string[]): AnalyzeSession {
+  const session: AnalyzeSession = {
+    id: randomUUID(),
+    createdAt: Date.now(),
+    videoPath,
+    framePaths,
+    previewPath: framePaths[0],
+  };
+  sessions.set(session.id, session);
+  return session;
+}
+
+function getSession(sessionId: string): AnalyzeSession {
+  cleanupExpiredSessions();
+  const session = sessions.get(sessionId);
+  if (!session) {
+    throw new Error('选人会话不存在或已过期，请重新上传视频');
+  }
+  return session;
+}
+
+function toImageDataUrl(filePath: string): string {
+  const base64 = fs.readFileSync(filePath).toString('base64');
+  return `data:image/jpeg;base64,${base64}`;
+}
 
 function getUploadErrorResponse(err: unknown): { statusCode: number; message: string } {
   if (err instanceof multer.MulterError) {
@@ -71,6 +135,34 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
     return {
       statusCode: 400,
       message: '上传的视频文件不存在或已损坏，请重新选择后重试',
+    };
+  }
+
+  if (message.includes('选人会话不存在或已过期')) {
+    return {
+      statusCode: 404,
+      message: '选人会话已失效，请重新上传视频',
+    };
+  }
+
+  if (message.includes('未能从视频中提取有效截图')) {
+    return {
+      statusCode: 400,
+      message: '无法从这个视频中提取有效画面，请更换更清晰的视频后重试',
+    };
+  }
+
+  if (message.includes('请先点击要评分的球员')) {
+    return {
+      statusCode: 400,
+      message: '请先点击要评分的球员',
+    };
+  }
+
+  if (message.includes('无法识别媒体尺寸')) {
+    return {
+      statusCode: 400,
+      message: '无法识别视频画面尺寸，请更换视频格式后重试',
     };
   }
 
@@ -179,6 +271,112 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   };
 }
 
+async function analyzeFramePaths(framePaths: string[]) {
+  const analysis = await analyzeWithQwen(framePaths);
+  return {
+    status: 'ok',
+    frames: framePaths.map((item) => path.basename(item)),
+    ...analysis,
+  };
+}
+
+function getFramePaths(frameNames: string[]): string[] {
+  return frameNames.map((frameName) => path.join(FRAMES_DIR, path.basename(frameName)));
+}
+
+router.post('/session', (req: Request, res: Response): void => {
+  cleanupExpiredSessions();
+
+  upload.single('video')(req, res, async (uploadErr: unknown) => {
+    if (uploadErr) {
+      console.error('上传失败:', uploadErr);
+      const { statusCode, message } = getUploadErrorResponse(uploadErr);
+      res.status(statusCode).json({ error: message });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: '没有收到视频文件，请确认字段名为 video' });
+      return;
+    }
+
+    const videoPath = req.file.path;
+    let extractedFramePaths: string[] = [];
+
+    try {
+      const outputPrefix = `frames_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const frames = await extractFrames(videoPath, outputPrefix);
+      extractedFramePaths = getFramePaths(frames);
+
+      if (extractedFramePaths.length === 0) {
+        throw new Error('未能从视频中提取有效截图');
+      }
+
+      const session = createSession(videoPath, extractedFramePaths);
+      const previewSize = await getMediaDimensions(session.previewPath);
+
+      res.json({
+        sessionId: session.id,
+        previewImage: toImageDataUrl(session.previewPath),
+        previewSize,
+      });
+    } catch (err) {
+      console.error('准备选人预览失败:', err);
+      deleteFileIfExists(videoPath);
+      extractedFramePaths.forEach(deleteFileIfExists);
+      const { statusCode, message } = getUploadErrorResponse(err);
+      res.status(statusCode).json({ error: message });
+    }
+  });
+});
+
+router.post('/session/:sessionId/select', async (req: Request, res: Response): Promise<void> => {
+  cleanupExpiredSessions();
+
+  try {
+    const { sessionId } = req.params;
+    const selection = {
+      x: Number(req.body?.x),
+      y: Number(req.body?.y),
+    };
+
+    if (
+      !Number.isFinite(selection.x) ||
+      !Number.isFinite(selection.y) ||
+      selection.x < 0 ||
+      selection.x > 1 ||
+      selection.y < 0 ||
+      selection.y > 1
+    ) {
+      throw new Error('请先点击要评分的球员');
+    }
+
+    const session = getSession(sessionId);
+    const previewDimensions = await getMediaDimensions(session.previewPath);
+    const selectedFramePaths: string[] = [];
+
+    try {
+      for (const [index, framePath] of session.framePaths.entries()) {
+        const outputPath = path.join(
+          FRAMES_DIR,
+          `${session.id}_${Date.now()}_selected_${String(index + 1).padStart(3, '0')}.jpg`
+        );
+        await cropImageAroundPoint(framePath, outputPath, selection, previewDimensions);
+        selectedFramePaths.push(outputPath);
+      }
+
+      const result = await analyzeFramePaths(selectedFramePaths);
+      res.json(result);
+    } finally {
+      selectedFramePaths.forEach(deleteFileIfExists);
+    }
+  } catch (err) {
+    console.error('定向分析失败:', err);
+    const { statusCode, message } = getUploadErrorResponse(err);
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 router.post('/', (req: Request, res: Response): void => {
   upload.single('video')(req, res, async (uploadErr: unknown) => {
     if (uploadErr) {
@@ -202,13 +400,15 @@ router.post('/', (req: Request, res: Response): void => {
       const frames = await extractFrames(videoPath, outputPrefix);
       console.log(`🖼️  抽帧完成: ${frames.length} 张，开始 Qwen-VL 分析…`);
 
-      const framesDir = path.join(__dirname, '../../frames');
-      const framePaths = frames.map((f) => path.join(framesDir, path.basename(f)));
+      const framePaths = getFramePaths(frames);
+      if (framePaths.length === 0) {
+        throw new Error('未能从视频中提取有效截图');
+      }
 
-      const analysis = await analyzeWithQwen(framePaths);
-      console.log(`✅ 分析完成: 得分 ${analysis.score}`);
+      const result = await analyzeFramePaths(framePaths);
+      console.log(`✅ 分析完成: 得分 ${result.score}`);
 
-      res.json({ status: 'ok', frames, ...analysis });
+      res.json(result);
     } catch (err) {
       console.error('分析失败:', err);
       const { statusCode, message } = getUploadErrorResponse(err);
