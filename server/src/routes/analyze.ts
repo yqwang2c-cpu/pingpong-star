@@ -18,10 +18,10 @@ const router = Router();
 function getClient(): OpenAI {
   const apiKey = process.env.DASHSCOPE_API_KEY?.trim();
   if (!apiKey) {
-    throw new Error('DASHSCOPE_API_KEY 未配置');
+    throw new Error('DASHSCOPE_API_KEY is not configured');
   }
 
-  // 通义千问 Qwen-VL，OpenAI 兼容接口
+  // Qwen-VL via the OpenAI-compatible API.
   return new OpenAI({
     apiKey,
     baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -93,7 +93,7 @@ function getSession(sessionId: string): AnalyzeSession {
   cleanupExpiredSessions();
   const session = sessions.get(sessionId);
   if (!session) {
-    throw new Error('选人会话不存在或已过期，请重新上传视频');
+    throw new Error('The player selection session has expired. Please upload the video again.');
   }
   return session;
 }
@@ -109,17 +109,17 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
       case 'LIMIT_FILE_SIZE':
         return {
           statusCode: 413,
-          message: '视频文件过大，当前最大支持 200MB，请压缩后重试',
+          message: 'The video file is too large. The current limit is 200MB.',
         };
       case 'LIMIT_UNEXPECTED_FILE':
         return {
           statusCode: 400,
-          message: '上传失败，请确认表单字段名为 video',
+          message: 'Upload failed. Please make sure the form field name is "video".',
         };
       default:
         return {
           statusCode: 400,
-          message: '视频上传失败，请更换文件后重试',
+          message: 'Video upload failed. Please try a different file.',
         };
     }
   }
@@ -129,112 +129,177 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
   if (message.includes('Invalid data found when processing input')) {
     return {
       statusCode: 400,
-      message: '无法识别该视频格式，请上传 mp4、mov 等常见视频文件',
+      message: 'This video format is not supported. Please upload a common format such as mp4 or mov.',
     };
   }
 
   if (message.includes('No such file or directory')) {
     return {
       statusCode: 400,
-      message: '上传的视频文件不存在或已损坏，请重新选择后重试',
+      message: 'The uploaded video could not be found or may be corrupted. Please choose it again.',
     };
   }
 
-  if (message.includes('选人会话不存在或已过期')) {
+  if (message.includes('selection session has expired')) {
     return {
       statusCode: 404,
-      message: '选人会话已失效，请重新上传视频',
+      message: 'The player selection session has expired. Please upload the video again.',
     };
   }
 
-  if (message.includes('未能从视频中提取有效截图')) {
+  if (message.includes('Could not extract valid frames from the video')) {
     return {
       statusCode: 400,
-      message: '无法从这个视频中提取有效画面，请更换更清晰的视频后重试',
+      message: 'We could not extract clear frames from this video. Please try a sharper clip.',
     };
   }
 
-  if (message.includes('请先点击要评分的球员')) {
+  if (message.includes('Please tap the player you want to analyze first')) {
     return {
       statusCode: 400,
-      message: '请先点击要评分的球员',
+      message: 'Please tap the player you want to analyze first.',
     };
   }
 
-  if (message.includes('无法识别媒体尺寸')) {
+  if (message.includes('Could not determine media dimensions')) {
     return {
       statusCode: 400,
-      message: '无法识别视频画面尺寸，请更换视频格式后重试',
+      message: 'We could not detect the video dimensions. Please try another format.',
     };
   }
 
-  if (message.includes('视频时长超过 10 秒')) {
+  if (message.includes('Video is longer than 10 seconds')) {
     return {
       statusCode: 400,
-      message: '视频时长不能超过 10 秒，请重新录制或裁剪后再试',
+      message: 'Videos must be 10 seconds or shorter. Please trim or record again.',
     };
   }
 
-  if (message.includes('DASHSCOPE_API_KEY 未配置')) {
+  if (message.includes('DASHSCOPE_API_KEY is not configured')) {
     return {
       statusCode: 503,
-      message: '服务器分析能力暂不可用，请稍后再试',
+      message: 'The analysis service is temporarily unavailable. Please try again later.',
     };
   }
 
-  if (message.includes('无法从 Qwen 响应中提取 JSON')) {
+  if (message.includes('Could not extract JSON from Qwen response')) {
     return {
       statusCode: 502,
-      message: '分析服务返回异常，请稍后重试',
+      message: 'The analysis service returned an unexpected response. Please try again.',
     };
   }
 
   return {
     statusCode: 500,
-    message: '服务器分析失败，请稍后重试',
+    message: 'Analysis failed on the server. Please try again later.',
   };
 }
 
-const COACHING_PROMPT = `你是严格的乒乓球专业教练，正在评估一段小学生练球视频的截图序列。你的评分标准极为严格，目的是帮助孩子找到真实不足。
+const COACHING_PROMPT = `You are a strict professional table tennis coach reviewing a sequence of frames from a young student's practice video. Score strictly so the child gets honest, actionable feedback.
 
-## 评分维度（每项 0-25 分）
+## Scoring dimensions (0-25 points each)
 
-### 1. 接球动作（0-25）
-- 0-5 分：动作完全错误，或看不到挥拍
-- 6-12 分：有挥拍但幅度不足，正手未到头顶，或反手手腕明显弯曲
-- 13-19 分：基本正确但细节有瑕疵
-- 20-25 分：正手清晰挥到头顶且舒展，或反手手腕完全固定
+### 1. Stroke mechanics (0-25)
+- 0-5: The stroke is clearly incorrect, or the swing cannot be seen.
+- 6-12: A swing exists but is incomplete. Forehand does not reach up well, or backhand wrist is visibly bent.
+- 13-19: Mostly correct with noticeable technical flaws.
+- 20-25: Clear, relaxed, technically sound stroke. Forehand reaches high; backhand wrist stays stable.
 
-### 2. 身体姿态（0-25）
-- 0-5 分：站直或向后仰，没有蹲马步
-- 6-12 分：稍微弯腰但核心不稳，重心偏后
-- 13-19 分：姿态基本稳定，偶有后仰
-- 20-25 分：全程蹲稳，重心始终在前，核心收紧
+### 2. Body posture (0-25)
+- 0-5: Standing upright or leaning backward, without an athletic stance.
+- 6-12: Slight bend only, unstable core, weight too far back.
+- 13-19: Mostly stable posture with occasional balance issues.
+- 20-25: Low, balanced stance throughout, weight forward, core engaged.
 
-### 3. 腰部转动（0-25）
-- 0-5 分：腰完全不转，只动手臂
-- 6-12 分：有转动但幅度过大（拍子转到背后）或幅度过小
-- 13-19 分：腰部转动参与发力，范围基本合理
-- 20-25 分：腰部带动手臂，转动流畅且控制在合理范围内
+### 3. Waist rotation (0-25)
+- 0-5: No waist rotation, mostly arm-only motion.
+- 6-12: Some rotation but either too large or too small.
+- 13-19: Waist rotation helps generate power and is mostly controlled.
+- 20-25: Smooth, efficient waist-driven motion with strong control.
 
-### 4. 复位（0-25）
-- 0-5 分：击球后僵在原地不动
-- 6-12 分：有复位意识但动作慢，超过 1 秒才恢复
-- 13-19 分：基本及时复位
-- 20-25 分：击球后立即弹回中立站位，衔接流畅
+### 4. Recovery (0-25)
+- 0-5: Freezes after contact and does not recover.
+- 6-12: Tries to recover but slowly, taking more than one second.
+- 13-19: Usually recovers in time.
+- 20-25: Quickly returns to a neutral ready position after each stroke.
 
-## 严格评估原则
-- **默认给低分**：动作"还行"不等于正确，必须清晰、标准才能进入中高分段
-- **看不到 = 不存在**：截图中无法判断某动作是否完成，该维度按 0-5 分处理
-- **60 分是及格线**：普通初学者的正常水平应在 40-55 分，只有动作明显标准的才能及格
-- 如果图片中无乒乓球相关场景，所有维度均为 0
+## Strict evaluation rules
+- Default to lower scores. "Looks okay" is not enough for a medium or high score.
+- If you cannot clearly see a movement, assume it is not done well and score 0-5 in that area.
+- 60 is a passing score. A normal beginner should often score around 40-55. Only clearly solid technique should pass.
+- If the frames do not show a table tennis practice scene, give 0 in every dimension.
+- All returned text must be English only.
+- Never use Chinese characters in strengths or improvements.
 
-请严格以如下 JSON 格式返回，不要输出任何其他内容：
+Return valid JSON only. No markdown, no explanation, no extra text.
 {
-  "score": <0-100 的整数，4个维度之和>,
-  "strengths": ["做得好的具体点，若无亮点则填'暂无明显亮点'"],
-  "improvements": ["最需要改进的具体点，1-3 条，要具体指出问题动作"]
+  "score": <integer from 0 to 100, sum of the four dimensions>,
+  "strengths": ["1-3 short English bullet points about what was done well. Use 'No clear strengths yet' if needed."],
+  "improvements": ["1-3 short English bullet points describing the most important technical fixes."]
 }`;
+
+function containsCjkText(value: unknown): boolean {
+  return typeof value === 'string' && /[\u3400-\u9fff]/.test(value);
+}
+
+async function ensureEnglishFeedback(
+  client: OpenAI,
+  analysis: {
+    score: number;
+    strengths: string[];
+    improvements: string[];
+  }
+): Promise<{
+  score: number;
+  strengths: string[];
+  improvements: string[];
+}> {
+  const hasNonEnglishFeedback =
+    analysis.strengths.some(containsCjkText) || analysis.improvements.some(containsCjkText);
+
+  if (!hasNonEnglishFeedback) {
+    return analysis;
+  }
+
+  const translationPrompt = [
+    'Rewrite the following table tennis coaching feedback into natural English.',
+    'Keep the score exactly the same.',
+    'Keep the JSON schema exactly the same.',
+    'Return valid JSON only.',
+    'Never use Chinese characters.',
+    JSON.stringify(analysis),
+  ].join('\n');
+
+  const response = await client.chat.completions.create({
+    model: 'qwen-vl-max',
+    messages: [
+      {
+        role: 'system',
+        content: 'You rewrite coaching feedback into concise English JSON.',
+      },
+      {
+        role: 'user',
+        content: translationPrompt,
+      },
+    ],
+    max_tokens: 512,
+  });
+
+  const text = response.choices[0]?.message?.content ?? '';
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Could not extract JSON from Qwen response');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+  return {
+    score: Math.max(0, Math.min(100, Math.round(Number(parsed.score ?? analysis.score)))),
+    strengths: Array.isArray(parsed.strengths) ? parsed.strengths : analysis.strengths,
+    improvements: Array.isArray(parsed.improvements)
+      ? parsed.improvements
+      : analysis.improvements,
+  };
+}
 
 async function analyzeWithQwen(framePaths: string[]): Promise<{
   score: number;
@@ -268,16 +333,16 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   const text = response.choices[0]?.message?.content ?? '';
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.error('Qwen 原始返回:', text);
-    throw new Error('无法从 Qwen 响应中提取 JSON');
+    console.error('Raw Qwen response:', text);
+    throw new Error('Could not extract JSON from Qwen response');
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
-  return {
+  return ensureEnglishFeedback(client, {
     score: Math.max(0, Math.min(100, Math.round(Number(parsed.score)))),
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
     improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
-  };
+  });
 }
 
 async function analyzeFramePaths(framePaths: string[]) {
@@ -296,7 +361,7 @@ function getFramePaths(frameNames: string[]): string[] {
 async function validateVideoDuration(videoPath: string): Promise<void> {
   const mediaInfo = await getMediaInfo(videoPath);
   if (mediaInfo.durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
-    throw new Error('视频时长超过 10 秒');
+    throw new Error('Video is longer than 10 seconds');
   }
 }
 
@@ -305,14 +370,14 @@ router.post('/session', (req: Request, res: Response): void => {
 
   upload.single('video')(req, res, async (uploadErr: unknown) => {
     if (uploadErr) {
-      console.error('上传失败:', uploadErr);
+      console.error('Upload failed:', uploadErr);
       const { statusCode, message } = getUploadErrorResponse(uploadErr);
       res.status(statusCode).json({ error: message });
       return;
     }
 
     if (!req.file) {
-      res.status(400).json({ error: '没有收到视频文件，请确认字段名为 video' });
+      res.status(400).json({ error: 'No video file was received. Please use the "video" field.' });
       return;
     }
 
@@ -326,7 +391,7 @@ router.post('/session', (req: Request, res: Response): void => {
       extractedFramePaths = getFramePaths(frames);
 
       if (extractedFramePaths.length === 0) {
-        throw new Error('未能从视频中提取有效截图');
+        throw new Error('Could not extract valid frames from the video');
       }
 
       const session = createSession(videoPath, extractedFramePaths);
@@ -338,7 +403,7 @@ router.post('/session', (req: Request, res: Response): void => {
         previewSize,
       });
     } catch (err) {
-      console.error('准备选人预览失败:', err);
+      console.error('Failed to prepare player selection preview:', err);
       deleteFileIfExists(videoPath);
       extractedFramePaths.forEach(deleteFileIfExists);
       const { statusCode, message } = getUploadErrorResponse(err);
@@ -365,7 +430,7 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
       selection.y < 0 ||
       selection.y > 1
     ) {
-      throw new Error('请先点击要评分的球员');
+      throw new Error('Please tap the player you want to analyze first');
     }
 
     const session = getSession(sessionId);
@@ -388,7 +453,7 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
       selectedFramePaths.forEach(deleteFileIfExists);
     }
   } catch (err) {
-    console.error('定向分析失败:', err);
+    console.error('Targeted analysis failed:', err);
     const { statusCode, message } = getUploadErrorResponse(err);
     res.status(statusCode).json({ error: message });
   }
@@ -397,38 +462,38 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
 router.post('/', (req: Request, res: Response): void => {
   upload.single('video')(req, res, async (uploadErr: unknown) => {
     if (uploadErr) {
-      console.error('上传失败:', uploadErr);
+      console.error('Upload failed:', uploadErr);
       const { statusCode, message } = getUploadErrorResponse(uploadErr);
       res.status(statusCode).json({ error: message });
       return;
     }
 
     if (!req.file) {
-      res.status(400).json({ error: '没有收到视频文件，请确认字段名为 video' });
+      res.status(400).json({ error: 'No video file was received. Please use the "video" field.' });
       return;
     }
 
     const videoPath = req.file.path;
     const outputPrefix = `frames_${Date.now()}`;
 
-    console.log(`📹 收到视频: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
+    console.log(`📹 Video received: ${req.file.filename} (${(req.file.size / 1024 / 1024).toFixed(1)} MB)`);
 
     try {
       await validateVideoDuration(videoPath);
       const frames = await extractFrames(videoPath, outputPrefix);
-      console.log(`🖼️  抽帧完成: ${frames.length} 张，开始 Qwen-VL 分析…`);
+      console.log(`🖼️  Frames extracted: ${frames.length}. Starting Qwen-VL analysis...`);
 
       const framePaths = getFramePaths(frames);
       if (framePaths.length === 0) {
-        throw new Error('未能从视频中提取有效截图');
+        throw new Error('Could not extract valid frames from the video');
       }
 
       const result = await analyzeFramePaths(framePaths);
-      console.log(`✅ 分析完成: 得分 ${result.score}`);
+      console.log(`✅ Analysis complete: score ${result.score}`);
 
       res.json(result);
     } catch (err) {
-      console.error('分析失败:', err);
+      console.error('Analysis failed:', err);
       const { statusCode, message } = getUploadErrorResponse(err);
       res.status(statusCode).json({ error: message });
     }

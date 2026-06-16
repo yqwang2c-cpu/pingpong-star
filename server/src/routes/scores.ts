@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 
 const router = Router();
 const SCORES_FILE = path.join(__dirname, '../../scores.json');
 
 interface ScoreEntry {
+  id?: string;
   name: string;
   score: number;
   createdAt: number;
@@ -20,30 +22,52 @@ function readScores(): ScoreEntry[] {
   }
 }
 
-// GET /api/scores — 返回每人最高分 Top 5
+function getTopFiveScores(allScores: ScoreEntry[]): ScoreEntry[] {
+  return [...allScores]
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.createdAt - b.createdAt;
+    })
+    .slice(0, 5);
+}
+
 router.get('/', (_req, res) => {
   const all = readScores();
-
-  const top5 = [...all]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  const top5 = getTopFiveScores(all);
 
   res.json({ scores: top5 });
 });
 
-// POST /api/scores — 保存一条新分数
 router.post('/', (req, res): void => {
   const { name, score } = req.body as { name?: string; score?: unknown };
   if (!name || typeof score !== 'number') {
-    res.status(400).json({ error: '需要 name（字符串）和 score（数字）字段' });
+    res.status(400).json({ error: 'Both name (string) and score (number) are required.' });
     return;
   }
 
   const scores = readScores();
-  scores.push({ name, score, createdAt: Date.now() });
+  const entry: ScoreEntry = {
+    id: randomUUID(),
+    name,
+    score,
+    createdAt: Date.now(),
+  };
+
+  scores.push(entry);
   fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2), 'utf-8');
 
-  res.json({ status: 'ok' });
+  const top5 = getTopFiveScores(scores);
+  const rankIndex = top5.findIndex((item) => item.id === entry.id);
+
+  res.json({
+    status: 'ok',
+    entry,
+    leaderboard: {
+      qualified: rankIndex !== -1,
+      rank: rankIndex === -1 ? null : rankIndex + 1,
+      scores: top5,
+    },
+  });
 });
 
 export default router;

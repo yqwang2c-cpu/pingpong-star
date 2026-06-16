@@ -34,12 +34,12 @@ export function extractFrames(videoPath: string, outputPrefix: string): Promise<
 
     ffmpeg(videoPath)
       .outputOptions([
-        '-vf', 'fps=1,scale=1280:-1',  // 每秒取1帧，宽度降到1280节省 API 费用
-        '-frames:v', '6',               // 最多取6张
+        // Sample one frame per second and scale down to reduce model cost.
+        '-vf', 'fps=1,scale=1280:-1',
+        '-frames:v', '6',
       ])
       .output(outputPattern)
       .on('end', () => {
-        // 找出生成的帧文件
         const frames: string[] = [];
         for (let i = 1; i <= 6; i++) {
           const filename = `${outputPrefix}_${String(i).padStart(3, '0')}.jpg`;
@@ -65,7 +65,7 @@ export function getMediaDimensions(filePath: string): Promise<MediaDimensions> {
 
       const stream = metadata.streams.find((item) => item.width && item.height);
       if (!stream?.width || !stream?.height) {
-        reject(new Error('无法识别媒体尺寸'));
+        reject(new Error('Could not determine media dimensions'));
         return;
       }
 
@@ -84,7 +84,7 @@ export function getMediaInfo(filePath: string): Promise<MediaInfo> {
 
       const stream = metadata.streams.find((item) => item.width && item.height);
       if (!stream?.width || !stream?.height) {
-        reject(new Error('无法识别媒体尺寸'));
+        reject(new Error('Could not determine media dimensions'));
         return;
       }
 

@@ -10,15 +10,15 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', message: '乒乓之星后端运行中 🏓' });
+  res.json({ status: 'ok', message: 'PingPong Star backend is running.' });
 });
 
 app.use('/api/analyze', analyzeRouter);
 app.use('/api/scores', scoresRouter);
 
 app.listen(PORT, () => {
-  console.log(`🚀 服务器启动: http://localhost:${PORT}`);
-  console.log(`   健康检查: http://localhost:${PORT}/health`);
-  console.log(`   分析接口: POST http://localhost:${PORT}/api/analyze`);
-  console.log(`   排行榜接口: GET/POST http://localhost:${PORT}/api/scores`);
+  console.log(`🚀 Server running: http://localhost:${PORT}`);
+  console.log(`   Health check: http://localhost:${PORT}/health`);
+  console.log(`   Analysis endpoint: POST http://localhost:${PORT}/api/analyze`);
+  console.log(`   Score endpoint: GET/POST http://localhost:${PORT}/api/scores`);
 });
