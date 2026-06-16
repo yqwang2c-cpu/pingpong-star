@@ -67,7 +67,7 @@ export default function HomeScreen({ navigation }: Props) {
   async function onNameConfirmed() {
     const name = inputName.trim();
     if (!name) {
-      Alert.alert('请输入姓名');
+      Alert.alert('Enter a player name');
       return;
     }
     setNameModalVisible(false);
@@ -82,12 +82,12 @@ export default function HomeScreen({ navigation }: Props) {
   async function pickAndAnalyzeVideo(playerName: string) {
     const picked = await pickVideoFromLibrary();
     if (picked.status === 'permission_denied') {
-      Alert.alert('需要权限', '请在设置中允许访问相册');
+      Alert.alert('Permission needed', 'Please allow photo library access in Settings.');
       return;
     }
 
     if (picked.status === 'too_long') {
-      Alert.alert('视频太长', getVideoDurationLimitMessage());
+      Alert.alert('Video too long', getVideoDurationLimitMessage());
       return;
     }
 
@@ -98,26 +98,49 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.orbTop} />
+      <View style={styles.orbRight} />
       <View style={styles.container}>
-        <Text style={styles.title}>乒乓之星 🏓</Text>
+        <View style={styles.heroCard}>
+          <Text style={styles.eyebrow}>Smart training for young players</Text>
+          <Text style={styles.title}>PingPong Star</Text>
+          <Text style={styles.subtitle}>
+            Record or upload a short practice clip, tap the player to analyze, and get instant AI coaching.
+          </Text>
+          <View style={styles.heroStats}>
+            <View style={styles.statPill}>
+              <Text style={styles.statLabel}>10s max</Text>
+            </View>
+            <View style={styles.statPill}>
+              <Text style={styles.statLabel}>Top 5 leaderboard</Text>
+            </View>
+            <View style={styles.statPill}>
+              <Text style={styles.statLabel}>English feedback</Text>
+            </View>
+          </View>
+        </View>
 
-        {/* 排行榜 */}
         <View style={styles.leaderboardCard}>
-          <Text style={styles.leaderboardTitle}>本周排行榜 Top 5</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardEyebrow}>Live ranking</Text>
+            <Text style={styles.leaderboardTitle}>Weekly Top 5</Text>
+          </View>
 
           <View style={styles.chartRow}>
             {loading ? (
-              <ActivityIndicator size="small" color="#3F51B5" />
+              <ActivityIndicator size="small" color="#5B8CFF" />
             ) : leaderboard.length === 0 ? (
-              <Text style={styles.emptyText}>快去录一段视频，成为第一名！🏅</Text>
+              <Text style={styles.emptyText}>No scores yet. Upload a clip and claim the first spot.</Text>
             ) : (
               leaderboard.map((player, index) => {
                 const barHeight = (player.score / MAX_SCORE) * MAX_BAR_HEIGHT;
+                const barColor =
+                  index === 0 ? '#F7B500' : index === 1 ? '#7DD3FC' : index === 2 ? '#A78BFA' : '#5B8CFF';
                 return (
                   <View key={index} style={styles.barColumn}>
                     <Text style={styles.barScore}>{player.score}</Text>
-                    <View style={[styles.bar, { height: barHeight }]} />
-                    <Text style={styles.barRank}>{index + 1}</Text>
+                    <View style={[styles.bar, { height: barHeight, backgroundColor: barColor }]} />
+                    <Text style={styles.barRank}>#{index + 1}</Text>
                     <Text style={styles.barName}>{player.name}</Text>
                   </View>
                 );
@@ -126,33 +149,37 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* 操作按钮行 */}
         <View style={styles.buttonRow}>
           <View style={styles.actionItem}>
             <TouchableOpacity
-              style={styles.cameraButton}
+              style={styles.actionCard}
               onPress={() => askName('record')}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonIcon}>🎥</Text>
+              <Text style={styles.actionTitle}>Record</Text>
+              <Text style={styles.actionSubtitle}>Capture a fresh training video with a 10-second limit.</Text>
             </TouchableOpacity>
-            <Text style={styles.buttonHint}>录像</Text>
           </View>
 
           <View style={styles.actionItem}>
             <TouchableOpacity
-              style={[styles.cameraButton, styles.uploadButton]}
+              style={[styles.actionCard, styles.uploadCard]}
               onPress={() => askName('upload')}
               activeOpacity={0.8}
             >
               <Text style={styles.buttonIcon}>📂</Text>
+              <Text style={styles.actionTitle}>Upload</Text>
+              <Text style={styles.actionSubtitle}>Choose an existing clip, then tap the player to score.</Text>
             </TouchableOpacity>
-            <Text style={styles.buttonHint}>上传录像</Text>
           </View>
         </View>
+
+        <Text style={styles.footerHint}>
+          Tip: the app celebrates with fireworks only when this result really enters the leaderboard.
+        </Text>
       </View>
 
-      {/* 姓名输入弹窗 */}
       <Modal
         visible={nameModalVisible}
         transparent
@@ -164,14 +191,14 @@ export default function HomeScreen({ navigation }: Props) {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>球员姓名</Text>
-            <Text style={styles.modalSubtitle}>请输入本次录像的球员名字</Text>
+            <Text style={styles.modalTitle}>Player name</Text>
+            <Text style={styles.modalSubtitle}>Enter the name to show on this result and the leaderboard.</Text>
             <TextInput
               style={styles.nameInput}
               value={inputName}
               onChangeText={setInputName}
-              placeholder="例如：王言一"
-              placeholderTextColor="#bbb"
+              placeholder="For example: Mia"
+              placeholderTextColor="#8FA1CC"
               autoFocus
               returnKeyType="done"
               onSubmitEditing={onNameConfirmed}
@@ -181,10 +208,10 @@ export default function HomeScreen({ navigation }: Props) {
                 style={styles.cancelBtn}
                 onPress={() => setNameModalVisible(false)}
               >
-                <Text style={styles.cancelText}>取消</Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.confirmBtn} onPress={onNameConfirmed}>
-                <Text style={styles.confirmText}>确定</Text>
+                <Text style={styles.confirmText}>Continue</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -197,141 +224,226 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#081120',
+  },
+  orbTop: {
+    position: 'absolute',
+    top: -60,
+    left: -20,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(91, 140, 255, 0.18)',
+  },
+  orbRight: {
+    position: 'absolute',
+    top: 120,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(37, 211, 171, 0.12)',
   },
   container: {
     flex: 1,
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 16,
+    paddingBottom: 20,
+  },
+  heroCard: {
+    backgroundColor: '#101B30',
+    borderRadius: 28,
+    padding: 22,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: '#7DD3FC',
+    marginBottom: 8,
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#1A237E',
-    marginBottom: 24,
+    color: '#F7FAFF',
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#C1CEE8',
+    marginBottom: 18,
+  },
+  heroStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  statPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  statLabel: {
+    color: '#E9F1FF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   leaderboardCard: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: '#F7FAFF',
+    borderRadius: 28,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    marginBottom: 32,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
+    marginBottom: 18,
+  },
+  cardHeader: {
+    marginBottom: 16,
+  },
+  cardEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5B8CFF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
   leaderboardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 16,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#13203A',
   },
   chartRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-around',
-    height: MAX_BAR_HEIGHT + 56,
-    paddingTop: 8,
+    height: MAX_BAR_HEIGHT + 64,
+    paddingTop: 10,
   },
   barColumn: {
     alignItems: 'center',
-    width: 48,
+    width: 52,
   },
   bar: {
     width: 32,
-    borderRadius: 4,
-    backgroundColor: '#3F51B5',
+    borderRadius: 10,
   },
   barScore: {
-    fontSize: 11,
-    color: '#333',
-    marginBottom: 4,
+    fontSize: 12,
+    color: '#20304C',
+    marginBottom: 6,
     fontWeight: '600',
   },
   barRank: {
     fontSize: 13,
-    color: '#888',
-    marginTop: 6,
+    color: '#60708F',
+    marginTop: 8,
   },
   barName: {
     fontSize: 11,
-    color: '#555',
-    marginTop: 2,
+    color: '#41516E',
+    marginTop: 4,
+    maxWidth: 52,
+    textAlign: 'center',
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 40,
-    alignItems: 'flex-start',
+    gap: 14,
   },
   actionItem: {
-    alignItems: 'center',
-    gap: 10,
+    flex: 1,
   },
-  cameraButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#3F51B5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3F51B5',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
+  actionCard: {
+    minHeight: 168,
+    borderRadius: 26,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+    backgroundColor: '#5B8CFF',
+    shadowColor: '#5B8CFF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
     elevation: 6,
   },
-  uploadButton: {
-    backgroundColor: '#00897B',
-    shadowColor: '#00897B',
+  uploadCard: {
+    backgroundColor: '#11B89A',
+    shadowColor: '#11B89A',
   },
   buttonIcon: {
-    fontSize: 36,
+    fontSize: 34,
+    marginBottom: 18,
   },
-  buttonHint: {
+  actionTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  actionSubtitle: {
+    color: 'rgba(255,255,255,0.86)',
     fontSize: 13,
-    color: '#888',
+    lineHeight: 20,
   },
   emptyText: {
     fontSize: 14,
-    color: '#999',
+    color: '#5A6C8C',
     textAlign: 'center',
     paddingVertical: 40,
   },
+  footerHint: {
+    marginTop: 16,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#9DB0D1',
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(3, 9, 20, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalBox: {
     width: '82%',
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#F7FAFF',
+    borderRadius: 24,
     padding: 24,
-    alignItems: 'center',
     gap: 12,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1A237E',
+    color: '#10203A',
+    textAlign: 'center',
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#888',
+    color: '#687A97',
     textAlign: 'center',
+    lineHeight: 20,
   },
   nameInput: {
     width: '100%',
-    borderWidth: 1.5,
-    borderColor: '#C5CAE9',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D1DCF2',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     fontSize: 18,
     color: '#222',
     textAlign: 'center',
@@ -345,21 +457,23 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#C5CAE9',
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D1DCF2',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
   },
   cancelText: {
     fontSize: 16,
-    color: '#888',
+    color: '#5A6C8C',
+    fontWeight: '600',
   },
   confirmBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#3F51B5',
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: '#5B8CFF',
     alignItems: 'center',
   },
   confirmText: {

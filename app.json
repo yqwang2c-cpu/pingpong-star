@@ -10,8 +10,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "需要摄像头来录制你的打球视频",
-        "NSMicrophoneUsageDescription": "录制视频需要麦克风"
+        "NSCameraUsageDescription": "This app needs camera access to record your practice video.",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to record audio with your video."
       }
     },
     "android": {

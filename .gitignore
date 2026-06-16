@@ -40,3 +40,18 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# local tooling / caches
+.npm/
+.npm-cache/
+.home/
+.eas-home/
+.eas-tmp/
+.sandbox-home/
+.tmp-home/
+.tmp/
+.trae-home/
+.trae-tmp/
+Library/
+tmp-eas-inspect/
+build.html

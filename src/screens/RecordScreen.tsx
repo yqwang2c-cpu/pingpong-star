@@ -50,7 +50,7 @@ export default function RecordScreen({ navigation, route }: Props) {
     setElapsed(0);
     timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
 
-    // recordAsync() 的 Promise 在 stopRecording() 被调用后 resolve
+    // recordAsync() resolves after stopRecording() is called or the max duration is reached.
     cameraRef.current
       ?.recordAsync({ maxDuration: MAX_VIDEO_DURATION_SECONDS })
       .then(result => {
@@ -74,16 +74,23 @@ export default function RecordScreen({ navigation, route }: Props) {
     navigation.navigate('TargetSelect', { videoUri, playerName });
   }, [playerName, videoUri, navigation]);
 
-  // 权限检查
   if (!cameraPermission || !micPermission) {
-    return <View style={styles.centered}><Text>正在检查权限…</Text></View>;
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.loadingText}>Checking permissions...</Text>
+      </View>
+    );
   }
 
   if (!cameraPermission.granted || !micPermission.granted) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.permText}>需要摄像头和麦克风权限才能录像 📷</Text>
+          <Text style={styles.permissionIcon}>🎥</Text>
+          <Text style={styles.permTitle}>Camera access is required</Text>
+          <Text style={styles.permText}>
+            Please allow both camera and microphone permissions so the app can record a full practice clip.
+          </Text>
           <TouchableOpacity
             style={styles.permButton}
             onPress={async () => {
@@ -91,7 +98,7 @@ export default function RecordScreen({ navigation, route }: Props) {
               await requestMicPermission();
             }}
           >
-            <Text style={styles.permButtonText}>授权</Text>
+            <Text style={styles.permButtonText}>Grant access</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -100,15 +107,13 @@ export default function RecordScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* 返回按钮 */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
       >
-        <Text style={styles.backText}>← 返回首页</Text>
+        <Text style={styles.backText}>← Home</Text>
       </TouchableOpacity>
 
-      {/* 摄像头 */}
       <CameraView
         ref={cameraRef}
         style={styles.camera}
@@ -116,13 +121,23 @@ export default function RecordScreen({ navigation, route }: Props) {
         mode="video"
       />
 
-      {/* 底部控制区 */}
+      <View style={styles.topPanel}>
+        <Text style={styles.playerChip}>Player: {playerName}</Text>
+        <Text style={styles.recordTitle}>Record a clean rally clip</Text>
+        <Text style={styles.recordSubtitle}>
+          Keep the full body visible and stay within the 10-second limit for the best analysis.
+        </Text>
+      </View>
+
       <View style={styles.controls}>
         {recordState === 'idle' && (
-          <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
-            <View style={styles.redDot} />
-            <Text style={styles.startText}>开始录像</Text>
-          </TouchableOpacity>
+          <>
+            <Text style={styles.controlHint}>Ready when you are</Text>
+            <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
+              <View style={styles.redDot} />
+              <Text style={styles.startText}>Start recording</Text>
+            </TouchableOpacity>
+          </>
         )}
 
         {recordState === 'recording' && (
@@ -133,18 +148,19 @@ export default function RecordScreen({ navigation, route }: Props) {
                 {formatTime(elapsed)} / 00:10
               </Text>
             </View>
+            <Text style={styles.liveHint}>Recording in progress</Text>
             <TouchableOpacity style={styles.stopButton} onPress={handleStopRecording}>
               <Text style={styles.stopIcon}>⏹</Text>
-              <Text style={styles.stopText}>停止</Text>
+              <Text style={styles.stopText}>Stop</Text>
             </TouchableOpacity>
           </>
         )}
 
         {recordState === 'stopped' && (
           <>
-            <Text style={styles.doneText}>✅ 录像完成 {formatTime(elapsed)} / 00:10</Text>
+            <Text style={styles.doneText}>Clip saved: {formatTime(elapsed)} / 00:10</Text>
             <TouchableOpacity style={styles.analyzeButton} onPress={handleStartAnalysis}>
-              <Text style={styles.analyzeText}>📊 开始分析</Text>
+              <Text style={styles.analyzeText}>Analyze this clip</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.retakeButton}
@@ -154,7 +170,7 @@ export default function RecordScreen({ navigation, route }: Props) {
                 setRecordState('idle');
               }}
             >
-              <Text style={styles.retakeText}>重新录像</Text>
+              <Text style={styles.retakeText}>Record again</Text>
             </TouchableOpacity>
           </>
         )}
@@ -166,26 +182,40 @@ export default function RecordScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#04070D',
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F8FF',
-    gap: 16,
+    backgroundColor: '#07111E',
+    gap: 14,
+    paddingHorizontal: 28,
+  },
+  loadingText: {
+    color: '#E8F0FF',
+    fontSize: 16,
+  },
+  permissionIcon: {
+    fontSize: 42,
+  },
+  permTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   permText: {
     fontSize: 16,
-    color: '#333',
+    color: '#B8C7E0',
     textAlign: 'center',
-    paddingHorizontal: 32,
+    lineHeight: 24,
   },
   permButton: {
-    backgroundColor: '#3F51B5',
+    marginTop: 4,
+    backgroundColor: '#5B8CFF',
     paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingVertical: 14,
+    borderRadius: 999,
   },
   permButtonText: {
     color: '#fff',
@@ -197,37 +227,87 @@ const styles = StyleSheet.create({
     top: 56,
     left: 16,
     zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: 'rgba(7, 17, 30, 0.72)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   backText: {
     color: '#fff',
     fontSize: 14,
+    fontWeight: '600',
   },
   camera: {
     flex: 1,
   },
+  topPanel: {
+    position: 'absolute',
+    top: 112,
+    left: 20,
+    right: 20,
+    zIndex: 5,
+    borderRadius: 24,
+    padding: 18,
+    backgroundColor: 'rgba(7, 17, 30, 0.64)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  playerChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(91, 140, 255, 0.18)',
+    color: '#DCE7FF',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  recordTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  recordSubtitle: {
+    color: '#C6D2E8',
+    fontSize: 14,
+    lineHeight: 21,
+  },
   controls: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingBottom: 48,
-    paddingTop: 20,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    bottom: 18,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 24,
+    backgroundColor: 'rgba(7, 17, 30, 0.78)',
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     gap: 12,
+  },
+  controlHint: {
+    color: '#BFD0EB',
+    fontSize: 14,
   },
   startButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E53935',
+    backgroundColor: '#FF5E7D',
     paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 32,
+    paddingVertical: 16,
+    borderRadius: 999,
     gap: 10,
+    shadowColor: '#FF5E7D',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 8,
   },
   redDot: {
     width: 12,
@@ -249,7 +329,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#E53935',
+    backgroundColor: '#FF5E7D',
   },
   timerText: {
     color: '#fff',
@@ -257,15 +337,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
+  liveHint: {
+    color: '#BFD0EB',
+    fontSize: 13,
+  },
   stopButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 2,
-    borderColor: '#fff',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
     paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 32,
+    paddingVertical: 13,
+    borderRadius: 999,
     gap: 8,
   },
   stopIcon: {
@@ -281,12 +365,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     marginBottom: 4,
+    fontWeight: '600',
   },
   analyzeButton: {
-    backgroundColor: '#43A047',
+    backgroundColor: '#11B89A',
     paddingHorizontal: 36,
-    paddingVertical: 14,
-    borderRadius: 32,
+    paddingVertical: 15,
+    borderRadius: 999,
+    minWidth: 220,
+    alignItems: 'center',
   },
   analyzeText: {
     color: '#fff',
@@ -298,7 +385,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   retakeText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.78)',
     fontSize: 14,
+    fontWeight: '600',
   },
 });

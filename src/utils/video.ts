@@ -10,7 +10,7 @@ type PickVideoResult =
   | { status: 'permission_denied' };
 
 export function getVideoDurationLimitMessage(): string {
-  return `视频时长不能超过 ${MAX_VIDEO_DURATION_SECONDS} 秒，请重新选择`;
+  return `Videos must be ${MAX_VIDEO_DURATION_SECONDS} seconds or shorter. Please choose another clip.`;
 }
 
 export function inferVideoMimeType(filename: string): string {

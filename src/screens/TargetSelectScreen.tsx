@@ -14,7 +14,11 @@ import {
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
-import type { AnalysisResult, AnalyzeSessionPreview } from '../types/analysis';
+import type {
+  AnalysisResult,
+  AnalyzeSessionPreview,
+  LeaderboardPlacement,
+} from '../types/analysis';
 import { SERVER_URL } from '../config/api';
 import {
   getVideoDurationLimitMessage,
@@ -40,12 +44,12 @@ function clamp(value: number, min: number, max: number): number {
 function getReadableErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     if (error.message.includes('Network request failed')) {
-      return '网络请求失败，请确认手机网络正常且可以访问服务器';
+      return 'Network request failed. Please make sure this device can reach the server.';
     }
     return error.message;
   }
 
-  return '分析失败，请稍后重试';
+  return 'Analysis failed. Please try again.';
 }
 
 function parseAnalysisResult(data: Record<string, unknown> | null): AnalysisResult {
@@ -69,15 +73,32 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     prepareSelectionSession(videoUri);
   }, [videoUri]);
 
-  async function saveScore(score: number) {
+  function getDefaultPlacement(): LeaderboardPlacement {
+    return { qualified: false, rank: null };
+  }
+
+  async function saveScore(score: number): Promise<LeaderboardPlacement> {
     try {
-      await fetch(`${SERVER_URL}/api/scores`, {
+      const response = await fetch(`${SERVER_URL}/api/scores`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: playerName, score }),
       });
+
+      const data = (await response.json()) as {
+        leaderboard?: { qualified?: unknown; rank?: unknown };
+      };
+
+      if (!response.ok) {
+        return getDefaultPlacement();
+      }
+
+      return {
+        qualified: data.leaderboard?.qualified === true,
+        rank: typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null,
+      };
     } catch {
-      // 离线时忽略，不影响结果展示
+      return getDefaultPlacement();
     }
   }
 
@@ -111,13 +132,13 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           if (!response.ok) {
             throw new Error(responseText);
           }
-          throw new Error('服务器返回了无法识别的预览结果');
+          throw new Error('The server returned an unreadable preview result.');
         }
       }
 
       if (!response.ok) {
         const serverError =
-          typeof data?.error === 'string' ? data.error : `服务器返回错误（${response.status}）`;
+          typeof data?.error === 'string' ? data.error : `Server error (${response.status})`;
         throw new Error(serverError);
       }
 
@@ -127,7 +148,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         typeof data?.previewSize !== 'object' ||
         data.previewSize === null
       ) {
-        throw new Error('服务器返回的选人预览数据不完整');
+        throw new Error('The preview response is missing required data.');
       }
 
       const previewSize = data.previewSize as Record<string, unknown>;
@@ -143,7 +164,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       setSessionPreview(preview);
       setScreenState('ready');
     } catch (error) {
-      console.error('准备选人预览失败:', error);
+      console.error('Failed to prepare player selection preview:', error);
       setSessionPreview(null);
       setErrorMessage(getReadableErrorMessage(error));
       setScreenState('error');
@@ -162,7 +183,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   async function handleAnalyze() {
     if (!sessionPreview) return;
     if (!selectedPoint) {
-      Alert.alert('请先点击要评分的球员');
+      Alert.alert('Choose a player first', 'Tap the player you want to analyze in the preview image.');
       return;
     }
 
@@ -189,21 +210,25 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           if (!response.ok) {
             throw new Error(responseText);
           }
-          throw new Error('服务器返回了无法识别的分析结果');
+          throw new Error('The server returned an unreadable analysis result.');
         }
       }
 
       if (!response.ok) {
         const serverError =
-          typeof data?.error === 'string' ? data.error : `服务器返回错误（${response.status}）`;
+          typeof data?.error === 'string' ? data.error : `Server error (${response.status})`;
         throw new Error(serverError);
       }
 
       const analysisResult = parseAnalysisResult(data);
-      await saveScore(analysisResult.score);
-      navigation.replace('Result', { playerName, result: analysisResult });
+      const leaderboardPlacement = await saveScore(analysisResult.score);
+      navigation.replace('Result', {
+        playerName,
+        result: analysisResult,
+        leaderboardPlacement,
+      });
     } catch (error) {
-      console.error('定向分析失败:', error);
+      console.error('Targeted analysis failed:', error);
       setErrorMessage(getReadableErrorMessage(error));
       setScreenState('ready');
     }
@@ -212,12 +237,12 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   async function handlePickAnotherVideo() {
     const picked = await pickVideoFromLibrary();
     if (picked.status === 'permission_denied') {
-      Alert.alert('需要权限', '请在设置中允许访问相册');
+      Alert.alert('Permission needed', 'Please allow photo library access in Settings.');
       return;
     }
 
     if (picked.status === 'too_long') {
-      Alert.alert('视频太长', getVideoDurationLimitMessage());
+      Alert.alert('Video too long', getVideoDurationLimitMessage());
       return;
     }
 
@@ -230,8 +255,8 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#3F51B5" />
-          <Text style={styles.loadingText}>正在上传视频并生成选人预览…</Text>
+          <ActivityIndicator size="large" color="#5B8CFF" />
+          <Text style={styles.loadingText}>Uploading your clip and creating the player selection preview...</Text>
         </View>
       </SafeAreaView>
     );
@@ -242,12 +267,12 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
           <Text style={styles.errorEmoji}>😢</Text>
-          <Text style={styles.errorText}>{errorMessage || '生成选人预览失败，请稍后重试'}</Text>
+          <Text style={styles.errorText}>{errorMessage || 'Could not create the player selection preview.'}</Text>
           <TouchableOpacity style={styles.primaryButton} onPress={() => prepareSelectionSession(videoUri)}>
-            <Text style={styles.primaryButtonText}>重新尝试</Text>
+            <Text style={styles.primaryButtonText}>Try again</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
-            <Text style={styles.secondaryButtonText}>重新选视频</Text>
+            <Text style={styles.secondaryButtonText}>Choose another video</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -256,13 +281,20 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
+      <View style={styles.orbTop} />
+      <View style={styles.orbBottom} />
       <View style={styles.container}>
-        <Text style={styles.title}>点选要评分的球员</Text>
+        <Text style={styles.stepLabel}>Step 2</Text>
+        <Text style={styles.title}>Tap the player to score</Text>
         <Text style={styles.subtitle}>
-          如果画面里有多人，请点击你想评分的那一位。系统会围绕这个位置进行分析。
+          If there are multiple people in the frame, tap the one you want to analyze. The app will focus the scoring around that player.
         </Text>
 
         <View style={styles.previewCard}>
+          <View style={styles.previewHeader}>
+            <Text style={styles.previewTitle}>Player preview</Text>
+            <Text style={styles.previewCaption}>Tap once to set the target</Text>
+          </View>
           <Pressable
             style={[
               styles.previewArea,
@@ -298,8 +330,8 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
         <Text style={styles.tipText}>
           {selectedPoint
-            ? '已选中目标人物，可以开始评分'
-            : '请点击画面中的目标球员'}
+            ? 'Target selected. You can start the analysis now.'
+            : 'Tap the player in the image to choose the target.'}
         </Text>
 
         {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
@@ -315,19 +347,19 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           {screenState === 'submitting' ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
-            <Text style={styles.primaryButtonText}>开始评分</Text>
+            <Text style={styles.primaryButtonText}>Start analysis</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
-          <Text style={styles.secondaryButtonText}>重新选视频</Text>
+          <Text style={styles.secondaryButtonText}>Choose another video</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.ghostButton}
           onPress={() => navigation.navigate('Record', { playerName })}
         >
-          <Text style={styles.ghostButtonText}>重新录像</Text>
+          <Text style={styles.ghostButtonText}>Record a new clip</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -337,7 +369,25 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#F0F8FF',
+    backgroundColor: '#081120',
+  },
+  orbTop: {
+    position: 'absolute',
+    top: -60,
+    right: -20,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(91, 140, 255, 0.16)',
+  },
+  orbBottom: {
+    position: 'absolute',
+    bottom: -70,
+    left: -30,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(17, 184, 154, 0.12)',
   },
   container: {
     flex: 1,
@@ -352,34 +402,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     gap: 16,
   },
-  title: {
-    fontSize: 26,
+  stepLabel: {
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(91, 140, 255, 0.16)',
+    color: '#9FC0FF',
+    fontSize: 12,
     fontWeight: '700',
-    color: '#1A237E',
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: '#F7FAFF',
     textAlign: 'center',
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 15,
-    color: '#566',
+    color: '#B6C5DE',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 20,
   },
   previewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 12,
+    backgroundColor: '#F7FAFF',
+    borderRadius: 28,
+    padding: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  previewHeader: {
+    paddingHorizontal: 6,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#13203A',
+  },
+  previewCaption: {
+    fontSize: 13,
+    color: '#60708F',
+    marginTop: 4,
   },
   previewArea: {
     width: '100%',
     overflow: 'hidden',
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: '#DDE7F7',
   },
   previewImage: {
@@ -388,29 +465,30 @@ const styles = StyleSheet.create({
   },
   marker: {
     position: 'absolute',
-    width: 28,
-    height: 28,
-    marginLeft: -14,
-    marginTop: -14,
-    borderRadius: 14,
+    width: 34,
+    height: 34,
+    marginLeft: -17,
+    marginTop: -17,
+    borderRadius: 17,
     borderWidth: 3,
     borderColor: '#fff',
-    backgroundColor: 'rgba(244, 67, 54, 0.9)',
+    backgroundColor: 'rgba(255, 94, 125, 0.92)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.24,
+    shadowRadius: 10,
+    elevation: 5,
   },
   tipText: {
     fontSize: 15,
-    color: '#445',
+    color: '#D8E4FA',
     textAlign: 'center',
     marginTop: 18,
     marginBottom: 10,
+    lineHeight: 22,
   },
   inlineError: {
-    color: '#c62828',
+    color: '#FFB4B4',
     textAlign: 'center',
     fontSize: 14,
     lineHeight: 20,
@@ -418,24 +496,30 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#555',
+    color: '#D8E4FA',
     textAlign: 'center',
+    lineHeight: 24,
   },
   errorEmoji: {
     fontSize: 40,
   },
   errorText: {
     fontSize: 16,
-    color: '#c62828',
+    color: '#FFB4B4',
     textAlign: 'center',
     lineHeight: 24,
   },
   primaryButton: {
     marginTop: 10,
-    backgroundColor: '#3F51B5',
-    borderRadius: 30,
+    backgroundColor: '#5B8CFF',
+    borderRadius: 999,
     paddingVertical: 16,
     alignItems: 'center',
+    shadowColor: '#5B8CFF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.24,
+    shadowRadius: 18,
+    elevation: 7,
   },
   disabledButton: {
     opacity: 0.55,
@@ -447,8 +531,8 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     marginTop: 12,
-    backgroundColor: '#00897B',
-    borderRadius: 30,
+    backgroundColor: '#11B89A',
+    borderRadius: 999,
     paddingVertical: 15,
     alignItems: 'center',
   },
@@ -459,15 +543,15 @@ const styles = StyleSheet.create({
   },
   ghostButton: {
     marginTop: 12,
-    borderRadius: 30,
+    borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#3F51B5',
-    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   ghostButtonText: {
-    color: '#3F51B5',
+    color: '#E8F0FF',
     fontSize: 16,
     fontWeight: '600',
   },

@@ -13,3 +13,8 @@ export interface AnalyzeSessionPreview {
     height: number;
   };
 }
+
+export interface LeaderboardPlacement {
+  qualified: boolean;
+  rank: number | null;
+}
