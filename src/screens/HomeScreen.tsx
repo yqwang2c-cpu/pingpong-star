@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -38,12 +40,81 @@ export default function HomeScreen({ navigation }: Props) {
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [inputName, setInputName] = useState('');
   const [pendingAction, setPendingAction] = useState<'record' | 'upload' | null>(null);
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroTranslateY = useRef(new Animated.Value(18)).current;
+  const leaderboardOpacity = useRef(new Animated.Value(0)).current;
+  const leaderboardTranslateY = useRef(new Animated.Value(26)).current;
+  const actionsOpacity = useRef(new Animated.Value(0)).current;
+  const actionsTranslateY = useRef(new Animated.Value(32)).current;
+  const barAnimations = useRef(Array.from({ length: 5 }, () => new Animated.Value(0))).current;
 
   useFocusEffect(
     useCallback(() => {
       fetchLeaderboard();
     }, [])
   );
+
+  useEffect(() => {
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          duration: 500,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroTranslateY, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(leaderboardOpacity, {
+          toValue: 1,
+          duration: 440,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(leaderboardTranslateY, {
+          toValue: 0,
+          duration: 440,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(actionsOpacity, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(actionsTranslateY, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [actionsOpacity, actionsTranslateY, heroOpacity, heroTranslateY, leaderboardOpacity, leaderboardTranslateY]);
+
+  useEffect(() => {
+    barAnimations.forEach((value) => value.setValue(0));
+    Animated.stagger(
+      90,
+      leaderboard.map((_, index) =>
+        Animated.timing(barAnimations[index], {
+          toValue: 1,
+          duration: 520,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        })
+      )
+    ).start();
+  }, [barAnimations, leaderboard]);
 
   async function fetchLeaderboard() {
     setLoading(true);
@@ -101,7 +172,12 @@ export default function HomeScreen({ navigation }: Props) {
       <View style={styles.orbTop} />
       <View style={styles.orbRight} />
       <View style={styles.container}>
-        <View style={styles.heroCard}>
+        <Animated.View
+          style={[
+            styles.heroCard,
+            { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
+          ]}
+        >
           <Text style={styles.eyebrow}>Smart training for young players</Text>
           <Text style={styles.title}>PingPong Star</Text>
           <Text style={styles.subtitle}>
@@ -118,9 +194,14 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.statLabel}>English feedback</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.leaderboardCard}>
+        <Animated.View
+          style={[
+            styles.leaderboardCard,
+            { opacity: leaderboardOpacity, transform: [{ translateY: leaderboardTranslateY }] },
+          ]}
+        >
           <View style={styles.cardHeader}>
             <Text style={styles.cardEyebrow}>Live ranking</Text>
             <Text style={styles.leaderboardTitle}>Weekly Top 5</Text>
@@ -138,8 +219,24 @@ export default function HomeScreen({ navigation }: Props) {
                   index === 0 ? '#F7B500' : index === 1 ? '#7DD3FC' : index === 2 ? '#A78BFA' : '#5B8CFF';
                 return (
                   <View key={index} style={styles.barColumn}>
+                    {index === 0 ? <Text style={styles.topBadge}>★</Text> : <View style={styles.badgeSpacer} />}
                     <Text style={styles.barScore}>{player.score}</Text>
-                    <View style={[styles.bar, { height: barHeight, backgroundColor: barColor }]} />
+                    <Animated.View
+                      style={[
+                        styles.bar,
+                        {
+                          backgroundColor: barColor,
+                          height: barAnimations[index].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, barHeight],
+                          }),
+                          opacity: barAnimations[index].interpolate({
+                            inputRange: [0, 0.2, 1],
+                            outputRange: [0.4, 0.7, 1],
+                          }),
+                        },
+                      ]}
+                    />
                     <Text style={styles.barRank}>#{index + 1}</Text>
                     <Text style={styles.barName}>{player.name}</Text>
                   </View>
@@ -147,9 +244,14 @@ export default function HomeScreen({ navigation }: Props) {
               })
             )}
           </View>
-        </View>
+        </Animated.View>
 
-        <View style={styles.buttonRow}>
+        <Animated.View
+          style={[
+            styles.buttonRow,
+            { opacity: actionsOpacity, transform: [{ translateY: actionsTranslateY }] },
+          ]}
+        >
           <View style={styles.actionItem}>
             <TouchableOpacity
               style={styles.actionCard}
@@ -173,7 +275,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.actionSubtitle}>Choose an existing clip, then tap the player to score.</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         <Text style={styles.footerHint}>
           Tip: the app celebrates with fireworks only when this result really enters the leaderboard.
@@ -336,6 +438,15 @@ const styles = StyleSheet.create({
   barColumn: {
     alignItems: 'center',
     width: 52,
+  },
+  topBadge: {
+    fontSize: 14,
+    color: '#F7B500',
+    marginBottom: 4,
+  },
+  badgeSpacer: {
+    height: 18,
+    marginBottom: 4,
   },
   bar: {
     width: 32,

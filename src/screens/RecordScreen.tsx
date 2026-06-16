@@ -6,6 +6,8 @@ import {
   StyleSheet,
   SafeAreaView,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -38,12 +40,100 @@ export default function RecordScreen({ navigation, route }: Props) {
   const [videoUri, setVideoUri] = useState<string | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordPulse = useRef(new Animated.Value(1)).current;
+  const liveOpacity = useRef(new Animated.Value(1)).current;
+  const panelOpacity = useRef(new Animated.Value(0)).current;
+  const panelTranslateY = useRef(new Animated.Value(28)).current;
+  const topPanelOpacity = useRef(new Animated.Value(0)).current;
+  const topPanelTranslateY = useRef(new Animated.Value(-18)).current;
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(panelOpacity, {
+        toValue: 1,
+        duration: 480,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(panelTranslateY, {
+        toValue: 0,
+        duration: 480,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(topPanelOpacity, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(topPanelTranslateY, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [panelOpacity, panelTranslateY, topPanelOpacity, topPanelTranslateY]);
+
+  useEffect(() => {
+    if (recordState !== 'recording') {
+      recordPulse.stopAnimation();
+      liveOpacity.stopAnimation();
+      recordPulse.setValue(1);
+      liveOpacity.setValue(1);
+      return;
+    }
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(recordPulse, {
+          toValue: 1.08,
+          duration: 700,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(recordPulse, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const opacityLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(liveOpacity, {
+          toValue: 0.35,
+          duration: 620,
+          useNativeDriver: true,
+        }),
+        Animated.timing(liveOpacity, {
+          toValue: 1,
+          duration: 620,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    pulseLoop.start();
+    opacityLoop.start();
+
+    return () => {
+      pulseLoop.stop();
+      opacityLoop.stop();
+      recordPulse.stopAnimation();
+      liveOpacity.stopAnimation();
+      recordPulse.setValue(1);
+      liveOpacity.setValue(1);
+    };
+  }, [liveOpacity, recordPulse, recordState]);
 
   const handleStartRecording = useCallback(() => {
     setRecordState('recording');
@@ -121,38 +211,63 @@ export default function RecordScreen({ navigation, route }: Props) {
         mode="video"
       />
 
-      <View style={styles.topPanel}>
+      <Animated.View
+        style={[
+          styles.topPanel,
+          { opacity: topPanelOpacity, transform: [{ translateY: topPanelTranslateY }] },
+        ]}
+      >
         <Text style={styles.playerChip}>Player: {playerName}</Text>
         <Text style={styles.recordTitle}>Record a clean rally clip</Text>
         <Text style={styles.recordSubtitle}>
           Keep the full body visible and stay within the 10-second limit for the best analysis.
         </Text>
-      </View>
+      </Animated.View>
 
-      <View style={styles.controls}>
+      <Animated.View
+        style={[
+          styles.controls,
+          { opacity: panelOpacity, transform: [{ translateY: panelTranslateY }] },
+        ]}
+      >
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.min(100, (elapsed / MAX_VIDEO_DURATION_SECONDS) * 100)}%`,
+                opacity: recordState === 'idle' ? 0.4 : 1,
+              },
+            ]}
+          />
+        </View>
         {recordState === 'idle' && (
           <>
             <Text style={styles.controlHint}>Ready when you are</Text>
-            <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
-              <View style={styles.redDot} />
-              <Text style={styles.startText}>Start recording</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: recordPulse }] }}>
+              <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
+                <View style={styles.redDot} />
+                <Text style={styles.startText}>Start recording</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </>
         )}
 
         {recordState === 'recording' && (
           <>
             <View style={styles.timerRow}>
-              <View style={styles.blinkDot} />
+              <Animated.View style={[styles.blinkDot, { opacity: liveOpacity }]} />
               <Text style={styles.timerText}>
                 {formatTime(elapsed)} / 00:10
               </Text>
             </View>
             <Text style={styles.liveHint}>Recording in progress</Text>
-            <TouchableOpacity style={styles.stopButton} onPress={handleStopRecording}>
-              <Text style={styles.stopIcon}>⏹</Text>
-              <Text style={styles.stopText}>Stop</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: recordPulse }] }}>
+              <TouchableOpacity style={styles.stopButton} onPress={handleStopRecording}>
+                <Text style={styles.stopIcon}>⏹</Text>
+                <Text style={styles.stopText}>Stop</Text>
+              </TouchableOpacity>
+            </Animated.View>
           </>
         )}
 
@@ -174,7 +289,7 @@ export default function RecordScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </>
         )}
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -290,6 +405,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     gap: 12,
+  },
+  progressTrack: {
+    width: '100%',
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 2,
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#11B89A',
   },
   controlHint: {
     color: '#BFD0EB',

@@ -128,6 +128,16 @@ function FireworksOverlay({ active }: { active: boolean }) {
 export default function ResultScreen({ navigation, route }: Props) {
   const { playerName, result, leaderboardPlacement } = route.params;
   const didEnterLeaderboard = leaderboardPlacement.qualified;
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const heroTranslateY = useRef(new Animated.Value(20)).current;
+  const scorePulse = useRef(new Animated.Value(1)).current;
+  const scoreGlow = useRef(new Animated.Value(didEnterLeaderboard ? 1 : 0.6)).current;
+  const feedbackOpacity = useRef(new Animated.Value(0)).current;
+  const feedbackTranslateY = useRef(new Animated.Value(26)).current;
+  const actionsOpacity = useRef(new Animated.Value(0)).current;
+  const actionsTranslateY = useRef(new Animated.Value(26)).current;
+  const scoreCounter = useRef(new Animated.Value(0)).current;
+  const [displayScore, setDisplayScore] = React.useState(0);
   const strengths = useMemo(
     () => (result.strengths.length > 0 ? result.strengths : ['No clear strengths yet.']),
     [result.strengths]
@@ -139,6 +149,116 @@ export default function ResultScreen({ navigation, route }: Props) {
         : ['Keep practicing and upload another clip for more detailed coaching.'],
     [result.improvements]
   );
+
+  useEffect(() => {
+    const scoreListener = scoreCounter.addListener(({ value }) => {
+      setDisplayScore(Math.round(value));
+    });
+
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroTranslateY, {
+          toValue: 0,
+          duration: 420,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scoreCounter, {
+          toValue: result.score,
+          duration: 1100,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: false,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(feedbackOpacity, {
+          toValue: 1,
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(feedbackTranslateY, {
+          toValue: 0,
+          duration: 360,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(actionsOpacity, {
+          toValue: 1,
+          duration: 340,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(actionsTranslateY, {
+          toValue: 0,
+          duration: 340,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scorePulse, {
+          toValue: didEnterLeaderboard ? 1.05 : 1.02,
+          duration: didEnterLeaderboard ? 850 : 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scorePulse, {
+          toValue: 1,
+          duration: didEnterLeaderboard ? 850 : 1400,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const glowLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scoreGlow, {
+          toValue: didEnterLeaderboard ? 1 : 0.75,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+        Animated.timing(scoreGlow, {
+          toValue: didEnterLeaderboard ? 0.65 : 0.55,
+          duration: 900,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    pulseLoop.start();
+    glowLoop.start();
+
+    return () => {
+      scoreCounter.removeListener(scoreListener);
+      pulseLoop.stop();
+      glowLoop.stop();
+    };
+  }, [
+    actionsOpacity,
+    actionsTranslateY,
+    didEnterLeaderboard,
+    feedbackOpacity,
+    feedbackTranslateY,
+    heroOpacity,
+    heroTranslateY,
+    result.score,
+    scoreCounter,
+    scoreGlow,
+    scorePulse,
+  ]);
 
   async function pickAndUpload() {
     const picked = await pickVideoFromLibrary();
@@ -163,7 +283,12 @@ export default function ResultScreen({ navigation, route }: Props) {
       <View style={styles.orbBottom} />
       <FireworksOverlay active={didEnterLeaderboard} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.heroCard}>
+        <Animated.View
+          style={[
+            styles.heroCard,
+            { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
+          ]}
+        >
           <Text style={styles.heroEyebrow}>Analysis complete</Text>
           <Text style={styles.playerName}>{playerName}</Text>
           <Text style={styles.heroTitle}>
@@ -174,15 +299,36 @@ export default function ResultScreen({ navigation, route }: Props) {
               ? `Live leaderboard rank: #${leaderboardPlacement.rank}`
               : 'This result was saved. Upload another clip anytime for a fresh analysis.'}
           </Text>
-          <View style={styles.scoreRing}>
-            <Text style={styles.scoreLabel}>Overall score</Text>
-            <Text style={styles.score}>{result.score}</Text>
-            <Text style={styles.scoreSuffix}>/ 100</Text>
+          <View style={styles.heroMetaRow}>
+            <View style={styles.metaChip}>
+              <Text style={styles.metaChipText}>{didEnterLeaderboard ? 'Leaderboard unlocked' : 'Saved to history'}</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Text style={styles.metaChipText}>{result.frames.length} frames reviewed</Text>
+            </View>
           </View>
-          {result.frames.length > 0 ? (
-            <Text style={styles.framesInfo}>Analyzed {result.frames.length} extracted frames</Text>
-          ) : null}
-        </View>
+          <Animated.View
+            style={[
+              styles.scoreRing,
+              {
+                transform: [{ scale: scorePulse }],
+                borderColor: scoreGlow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['rgba(91, 140, 255, 0.14)', 'rgba(247, 181, 0, 0.45)'],
+                }),
+                shadowOpacity: scoreGlow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.12, 0.28],
+                }),
+              },
+            ]}
+          >
+            <Text style={styles.scoreLabel}>Overall score</Text>
+            <Text style={styles.score}>{displayScore}</Text>
+            <Text style={styles.scoreSuffix}>/ 100</Text>
+          </Animated.View>
+          {result.frames.length > 0 ? <Text style={styles.framesInfo}>Analyzed {result.frames.length} extracted frames</Text> : null}
+        </Animated.View>
 
         {didEnterLeaderboard && (
           <View style={styles.banner}>
@@ -192,40 +338,54 @@ export default function ResultScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        <View style={styles.feedbackCard}>
-          <Text style={styles.sectionTitle}>What went well</Text>
-          {strengths.map((item, index) => (
-            <Text key={index} style={styles.bullet}>• {item}</Text>
-          ))}
-        </View>
-
-        <View style={styles.feedbackCard}>
-          <Text style={styles.sectionTitle}>What to improve next</Text>
-          {improvements.map((item, index) => (
-            <Text key={index} style={styles.bullet}>• {item}</Text>
-          ))}
-        </View>
-
-        <TouchableOpacity
-          style={styles.recordAgainButton}
-          onPress={() => navigation.navigate('Record', { playerName })}
+        <Animated.View
+          style={[
+            styles.feedbackGroup,
+            { opacity: feedbackOpacity, transform: [{ translateY: feedbackTranslateY }] },
+          ]}
         >
-          <Text style={styles.recordAgainText}>Record a new clip</Text>
-        </TouchableOpacity>
+          <View style={styles.feedbackCard}>
+            <Text style={styles.sectionTitle}>What went well</Text>
+            {strengths.map((item, index) => (
+              <Text key={index} style={styles.bullet}>• {item}</Text>
+            ))}
+          </View>
 
-        <TouchableOpacity
-          style={styles.uploadAgainButton}
-          onPress={pickAndUpload}
-        >
-          <Text style={styles.uploadAgainText}>Upload another video</Text>
-        </TouchableOpacity>
+          <View style={styles.feedbackCard}>
+            <Text style={styles.sectionTitle}>What to improve next</Text>
+            {improvements.map((item, index) => (
+              <Text key={index} style={styles.bullet}>• {item}</Text>
+            ))}
+          </View>
+        </Animated.View>
 
-        <TouchableOpacity
-          style={styles.homeButton}
-          onPress={() => navigation.navigate('Home')}
+        <Animated.View
+          style={[
+            styles.actionsGroup,
+            { opacity: actionsOpacity, transform: [{ translateY: actionsTranslateY }] },
+          ]}
         >
-          <Text style={styles.homeText}>Back to home</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.recordAgainButton}
+            onPress={() => navigation.navigate('Record', { playerName })}
+          >
+            <Text style={styles.recordAgainText}>Record a new clip</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.uploadAgainButton}
+            onPress={pickAndUpload}
+          >
+            <Text style={styles.uploadAgainText}>Upload another video</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.homeButton}
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text style={styles.homeText}>Back to home</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -313,6 +473,26 @@ const styles = StyleSheet.create({
     color: '#BFD0EB',
     marginBottom: 20,
   },
+  heroMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 18,
+  },
+  metaChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  metaChipText: {
+    color: '#E6EEFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   scoreRing: {
     width: 190,
     height: 190,
@@ -323,6 +503,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 8,
     borderColor: 'rgba(91, 140, 255, 0.18)',
+    shadowColor: '#F7B500',
+    shadowOffset: { width: 0, height: 14 },
+    shadowRadius: 26,
+    elevation: 10,
   },
   scoreLabel: {
     fontSize: 14,
@@ -356,6 +540,9 @@ const styles = StyleSheet.create({
     color: '#FFE7A0',
     textAlign: 'center',
   },
+  feedbackGroup: {
+    gap: 14,
+  },
   feedbackCard: {
     backgroundColor: '#F7FAFF',
     borderRadius: 24,
@@ -377,6 +564,9 @@ const styles = StyleSheet.create({
     color: '#40506B',
     lineHeight: 24,
     marginBottom: 8,
+  },
+  actionsGroup: {
+    gap: 14,
   },
   recordAgainButton: {
     backgroundColor: '#5B8CFF',

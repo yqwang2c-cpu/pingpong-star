@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GestureResponderEvent } from 'react-native';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Image,
   Pressable,
   SafeAreaView,
@@ -68,10 +70,91 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [errorMessage, setErrorMessage] = useState('');
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(24)).current;
+  const previewScale = useRef(new Animated.Value(0.97)).current;
+  const pulseScale = useRef(new Animated.Value(1)).current;
+  const pulseOpacity = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
     prepareSelectionSession(videoUri);
   }, [videoUri]);
+
+  useEffect(() => {
+    if (screenState !== 'ready') return;
+
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenTranslateY, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(previewScale, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [previewScale, screenOpacity, screenState, screenTranslateY]);
+
+  useEffect(() => {
+    if (!selectedPoint) {
+      pulseScale.stopAnimation();
+      pulseOpacity.stopAnimation();
+      pulseScale.setValue(1);
+      pulseOpacity.setValue(0.8);
+      return;
+    }
+
+    const scaleLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseScale, {
+          toValue: 1.6,
+          duration: 900,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseScale, {
+          toValue: 1,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    const opacityLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseOpacity, {
+          toValue: 0,
+          duration: 900,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseOpacity, {
+          toValue: 0.8,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    scaleLoop.start();
+    opacityLoop.start();
+
+    return () => {
+      scaleLoop.stop();
+      opacityLoop.stop();
+      pulseScale.stopAnimation();
+      pulseOpacity.stopAnimation();
+    };
+  }, [pulseOpacity, pulseScale, selectedPoint]);
 
   function getDefaultPlacement(): LeaderboardPlacement {
     return { qualified: false, rank: null };
@@ -283,14 +366,19 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.orbTop} />
       <View style={styles.orbBottom} />
-      <View style={styles.container}>
+      <Animated.View
+        style={[
+          styles.container,
+          { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] },
+        ]}
+      >
         <Text style={styles.stepLabel}>Step 2</Text>
         <Text style={styles.title}>Tap the player to score</Text>
         <Text style={styles.subtitle}>
           If there are multiple people in the frame, tap the one you want to analyze. The app will focus the scoring around that player.
         </Text>
 
-        <View style={styles.previewCard}>
+        <Animated.View style={[styles.previewCard, { transform: [{ scale: previewScale }] }]}>
           <View style={styles.previewHeader}>
             <Text style={styles.previewTitle}>Player preview</Text>
             <Text style={styles.previewCaption}>Tap once to set the target</Text>
@@ -315,18 +403,31 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
               resizeMode="cover"
             />
             {selectedPoint && (
-              <View
-                style={[
-                  styles.marker,
-                  {
-                    left: `${selectedPoint.x * 100}%`,
-                    top: `${selectedPoint.y * 100}%`,
-                  },
-                ]}
-              />
+              <>
+                <Animated.View
+                  style={[
+                    styles.markerPulse,
+                    {
+                      left: `${selectedPoint.x * 100}%`,
+                      top: `${selectedPoint.y * 100}%`,
+                      opacity: pulseOpacity,
+                      transform: [{ scale: pulseScale }],
+                    },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.marker,
+                    {
+                      left: `${selectedPoint.x * 100}%`,
+                      top: `${selectedPoint.y * 100}%`,
+                    },
+                  ]}
+                />
+              </>
             )}
           </Pressable>
-        </View>
+        </Animated.View>
 
         <Text style={styles.tipText}>
           {selectedPoint
@@ -361,7 +462,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         >
           <Text style={styles.ghostButtonText}>Record a new clip</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -478,6 +579,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.24,
     shadowRadius: 10,
     elevation: 5,
+  },
+  markerPulse: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    marginLeft: -17,
+    marginTop: -17,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255, 94, 125, 0.22)',
   },
   tipText: {
     fontSize: 15,
