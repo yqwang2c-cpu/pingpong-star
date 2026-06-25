@@ -69,6 +69,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const [screenState, setScreenState] = useState<ScreenState>('preparing');
   const [sessionPreview, setSessionPreview] = useState<AnalyzeSessionPreview | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
+  const selectedPointRef = useRef<SelectedPoint | null>(null);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [errorMessage, setErrorMessage] = useState('');
   const screenOpacity = useRef(new Animated.Value(0)).current;
@@ -77,6 +78,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.8)).current;
   const autoAnalyzeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     prepareSelectionSession(videoUri);
@@ -85,8 +87,16 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         clearTimeout(autoAnalyzeTimeoutRef.current);
         autoAnalyzeTimeoutRef.current = null;
       }
+      if (autoStartTimeoutRef.current) {
+        clearTimeout(autoStartTimeoutRef.current);
+        autoStartTimeoutRef.current = null;
+      }
     };
   }, [videoUri]);
+
+  useEffect(() => {
+    selectedPointRef.current = selectedPoint;
+  }, [selectedPoint]);
 
   useEffect(() => {
     if (screenState !== 'ready') return;
@@ -199,6 +209,15 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       setSessionPreview(null);
       setErrorMessage('');
       setSelectedPoint(null);
+      selectedPointRef.current = null;
+      if (autoAnalyzeTimeoutRef.current) {
+        clearTimeout(autoAnalyzeTimeoutRef.current);
+        autoAnalyzeTimeoutRef.current = null;
+      }
+      if (autoStartTimeoutRef.current) {
+        clearTimeout(autoStartTimeoutRef.current);
+        autoStartTimeoutRef.current = null;
+      }
 
       const filename = uri.split('/').pop() ?? 'video.mov';
       const formData = new FormData();
@@ -254,6 +273,11 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
       setSessionPreview(preview);
       setScreenState('ready');
+
+      autoStartTimeoutRef.current = setTimeout(() => {
+        if (selectedPointRef.current) return;
+        handleAnalyze({ x: 0.5, y: 0.5 });
+      }, 650);
     } catch (error) {
       console.error('Failed to prepare player selection preview:', error);
       setSessionPreview(null);
@@ -264,6 +288,11 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
   function handlePreviewPress(event: GestureResponderEvent) {
     if (!previewLayout.width || !previewLayout.height) return;
+
+    if (autoStartTimeoutRef.current) {
+      clearTimeout(autoStartTimeoutRef.current);
+      autoStartTimeoutRef.current = null;
+    }
 
     const x = clamp(event.nativeEvent.locationX / previewLayout.width, 0, 1);
     const y = clamp(event.nativeEvent.locationY / previewLayout.height, 0, 1);
@@ -450,9 +479,11 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           </Animated.View>
 
           <Text style={styles.tipText}>
-            {selectedPoint
+            {screenState === 'submitting'
               ? 'Starting analysis...'
-              : 'Tap the player to select.'}
+              : selectedPoint
+                ? 'Starting analysis...'
+                : 'Starting analysis... Tap a player to change.'}
           </Text>
 
           {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}

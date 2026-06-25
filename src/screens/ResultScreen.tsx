@@ -23,11 +23,11 @@ interface Props {
   route: ResultRouteProp;
 }
 
-const FIREWORK_PARTICLES = Array.from({ length: 14 }, (_, index) => {
-  const burstIndex = index % 7;
-  const burstSide = index < 7 ? 'left' : 'right';
-  const angle = (burstIndex / 7) * Math.PI * 2 - Math.PI / 2;
-  const radius = 54 + burstIndex * 8;
+const FIREWORK_PARTICLES = Array.from({ length: 24 }, (_, index) => {
+  const burstIndex = index % 12;
+  const burstSide = index < 12 ? 'left' : 'right';
+  const angle = (burstIndex / 12) * Math.PI * 2 - Math.PI / 2;
+  const radius = 78 + burstIndex * 10;
 
   return {
     key: `particle-${index}`,
@@ -35,19 +35,22 @@ const FIREWORK_PARTICLES = Array.from({ length: 14 }, (_, index) => {
     angle,
     radius,
     color: ['#F7B500', '#FF5E7D', '#7DD3FC', '#A78BFA', '#11B89A'][index % 5],
-    icon: index % 3 === 0 ? '✦' : '•',
-    delay: burstIndex * 110,
+    icon: index % 4 === 0 ? '✦' : index % 4 === 1 ? '✺' : '•',
+    delay: burstIndex * 70,
   };
 });
 
 function FireworksOverlay({ active }: { active: boolean }) {
   const progressValues = useRef(FIREWORK_PARTICLES.map(() => new Animated.Value(0))).current;
+  const flash = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     progressValues.forEach((value) => value.stopAnimation());
+    flash.stopAnimation();
 
     if (!active) {
       progressValues.forEach((value) => value.setValue(0));
+      flash.setValue(0);
       return;
     }
 
@@ -57,11 +60,11 @@ function FireworksOverlay({ active }: { active: boolean }) {
           Animated.delay(FIREWORK_PARTICLES[index].delay),
           Animated.timing(value, {
             toValue: 1,
-            duration: 1250,
+            duration: 1100,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
-          Animated.delay(380),
+          Animated.delay(260),
           Animated.timing(value, {
             toValue: 0,
             duration: 0,
@@ -71,13 +74,34 @@ function FireworksOverlay({ active }: { active: boolean }) {
       )
     );
 
+    const flashLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(flash, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(flash, {
+          toValue: 0,
+          duration: 520,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.delay(620),
+      ])
+    );
+
     animations.forEach((animation) => animation.start());
+    flashLoop.start();
 
     return () => {
       animations.forEach((animation) => animation.stop());
       progressValues.forEach((value) => value.stopAnimation());
+      flashLoop.stop();
+      flash.stopAnimation();
     };
-  }, [active, progressValues]);
+  }, [active, flash, progressValues]);
 
   if (!active) {
     return null;
@@ -85,6 +109,21 @@ function FireworksOverlay({ active }: { active: boolean }) {
 
   return (
     <View pointerEvents="none" style={styles.fireworksOverlay}>
+      <Animated.View
+        style={[
+          styles.fireworksFlash,
+          {
+            opacity: flash.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.85],
+            }),
+            transform: [
+              { translateX: -140 },
+              { scale: flash.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) },
+            ],
+          },
+        ]}
+      />
       {FIREWORK_PARTICLES.map((particle, index) => {
         const progress = progressValues[index];
         const translateX = progress.interpolate({
@@ -138,6 +177,7 @@ export default function ResultScreen({ navigation, route }: Props) {
   const actionsTranslateY = useRef(new Animated.Value(26)).current;
   const scoreCounter = useRef(new Animated.Value(0)).current;
   const [displayScore, setDisplayScore] = React.useState(0);
+  const [detailsExpanded, setDetailsExpanded] = React.useState(false);
   const strengths = useMemo(
     () => (result.strengths.length > 0 ? result.strengths : ['No clear strengths yet.']),
     [result.strengths]
@@ -149,6 +189,8 @@ export default function ResultScreen({ navigation, route }: Props) {
         : ['Keep practicing and upload another clip for more detailed coaching.'],
     [result.improvements]
   );
+  const strengthHighlights = useMemo(() => strengths.slice(0, 2), [strengths]);
+  const improvementHighlights = useMemo(() => improvements.slice(0, 2), [improvements]);
 
   useEffect(() => {
     const scoreListener = scoreCounter.addListener(({ value }) => {
@@ -344,19 +386,44 @@ export default function ResultScreen({ navigation, route }: Props) {
             { opacity: feedbackOpacity, transform: [{ translateY: feedbackTranslateY }] },
           ]}
         >
-          <View style={styles.feedbackCard}>
-            <Text style={styles.sectionTitle}>What went well</Text>
-            {strengths.map((item, index) => (
-              <Text key={index} style={styles.bullet}>• {item}</Text>
-            ))}
-          </View>
+          {detailsExpanded ? (
+            <>
+              <View style={styles.feedbackCard}>
+                <Text style={styles.sectionTitle}>What went well</Text>
+                {strengths.map((item, index) => (
+                  <Text key={index} style={styles.bullet}>• {item}</Text>
+                ))}
+              </View>
 
-          <View style={styles.feedbackCard}>
-            <Text style={styles.sectionTitle}>What to improve next</Text>
-            {improvements.map((item, index) => (
-              <Text key={index} style={styles.bullet}>• {item}</Text>
-            ))}
-          </View>
+              <View style={styles.feedbackCard}>
+                <Text style={styles.sectionTitle}>What to improve next</Text>
+                {improvements.map((item, index) => (
+                  <Text key={index} style={styles.bullet}>• {item}</Text>
+                ))}
+              </View>
+            </>
+          ) : (
+            <View style={styles.feedbackCard}>
+              <Text style={styles.sectionTitle}>Highlights</Text>
+              <Text style={styles.compactTitle}>What went well</Text>
+              {strengthHighlights.map((item, index) => (
+                <Text key={index} style={styles.compactBullet}>• {item}</Text>
+              ))}
+              <Text style={[styles.compactTitle, styles.compactTitleSpacing]}>Next focus</Text>
+              {improvementHighlights.map((item, index) => (
+                <Text key={index} style={styles.compactBullet}>• {item}</Text>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.detailsToggle}
+            onPress={() => setDetailsExpanded((value) => !value)}
+          >
+            <Text style={styles.detailsToggleText}>
+              {detailsExpanded ? 'Hide details' : 'Show full feedback'}
+            </Text>
+          </TouchableOpacity>
         </Animated.View>
 
         <Animated.View
@@ -417,17 +484,26 @@ const styles = StyleSheet.create({
   },
   fireworksOverlay: {
     position: 'absolute',
-    top: 12,
+    top: 0,
     left: 0,
     right: 0,
-    height: 220,
+    bottom: 0,
     zIndex: 20,
     elevation: 20,
   },
+  fireworksFlash: {
+    position: 'absolute',
+    top: 40,
+    left: '50%',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(247, 181, 0, 0.32)',
+  },
   fireworkParticle: {
     position: 'absolute',
-    top: 126,
-    fontSize: 22,
+    top: 152,
+    fontSize: 30,
     fontWeight: '700',
   },
   scroll: {
@@ -574,6 +650,36 @@ const styles = StyleSheet.create({
     color: '#40506B',
     lineHeight: 24,
     marginBottom: 8,
+  },
+  compactTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#13203A',
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  compactTitleSpacing: {
+    marginTop: 14,
+  },
+  compactBullet: {
+    fontSize: 14,
+    color: '#40506B',
+    lineHeight: 22,
+    marginBottom: 6,
+  },
+  detailsToggle: {
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  detailsToggleText: {
+    color: '#E8F0FF',
+    fontSize: 14,
+    fontWeight: '700',
   },
   actionsGroup: {
     gap: 14,

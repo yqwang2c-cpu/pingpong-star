@@ -6,6 +6,12 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
+    disk:
+      name: scores
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: DASHSCOPE_API_KEY
         sync: false
+      - key: SCORES_FILE
+        value: /var/data/scores.json
