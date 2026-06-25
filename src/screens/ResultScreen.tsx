@@ -166,7 +166,7 @@ function FireworksOverlay({ active }: { active: boolean }) {
 
 export default function ResultScreen({ navigation, route }: Props) {
   const { playerName, result, leaderboardPlacement } = route.params;
-  const didEnterLeaderboard = leaderboardPlacement.qualified;
+  const didEnterLeaderboard = leaderboardPlacement.qualified && leaderboardPlacement.celebrate !== false;
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const heroTranslateY = useRef(new Animated.Value(20)).current;
   const scorePulse = useRef(new Animated.Value(1)).current;

@@ -24,6 +24,13 @@ import type {
 } from '../types/analysis';
 import { SERVER_URL } from '../config/api';
 import {
+  DEFAULT_POINT,
+  getCachedAnalysis,
+  getVideoMd5,
+  makeCacheKey,
+  setCachedAnalysis,
+} from '../utils/analysisCache';
+import {
   getVideoDurationLimitMessage,
   inferVideoMimeType,
   pickVideoFromLibrary,
@@ -70,6 +77,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const [sessionPreview, setSessionPreview] = useState<AnalyzeSessionPreview | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<SelectedPoint | null>(null);
   const selectedPointRef = useRef<SelectedPoint | null>(null);
+  const [videoMd5, setVideoMd5] = useState<string | null>(null);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [errorMessage, setErrorMessage] = useState('');
   const screenOpacity = useRef(new Animated.Value(0)).current;
@@ -81,8 +89,30 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const autoStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    prepareSelectionSession(videoUri);
+    let cancelled = false;
+    (async () => {
+      const md5 = await getVideoMd5(videoUri);
+      if (cancelled) return;
+      setVideoMd5(md5);
+
+      if (md5) {
+        const cacheKey = makeCacheKey(md5, DEFAULT_POINT);
+        const cached = await getCachedAnalysis(cacheKey);
+        if (cancelled) return;
+        if (cached) {
+          navigation.replace('Result', {
+            playerName,
+            result: cached,
+            leaderboardPlacement: { qualified: false, rank: null, celebrate: false },
+          });
+          return;
+        }
+      }
+
+      prepareSelectionSession(videoUri);
+    })();
     return () => {
+      cancelled = true;
       if (autoAnalyzeTimeoutRef.current) {
         clearTimeout(autoAnalyzeTimeoutRef.current);
         autoAnalyzeTimeoutRef.current = null;
@@ -92,7 +122,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         autoStartTimeoutRef.current = null;
       }
     };
-  }, [videoUri]);
+  }, [navigation, playerName, videoUri]);
 
   useEffect(() => {
     selectedPointRef.current = selectedPoint;
@@ -175,7 +205,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   }, [pulseOpacity, pulseScale, selectedPoint]);
 
   function getDefaultPlacement(): LeaderboardPlacement {
-    return { qualified: false, rank: null };
+    return { qualified: false, rank: null, celebrate: false };
   }
 
   async function saveScore(score: number): Promise<LeaderboardPlacement> {
@@ -194,9 +224,11 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         return getDefaultPlacement();
       }
 
+      const qualified = data.leaderboard?.qualified === true;
       return {
-        qualified: data.leaderboard?.qualified === true,
+        qualified,
         rank: typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null,
+        celebrate: qualified,
       };
     } catch {
       return getDefaultPlacement();
@@ -353,6 +385,10 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
       const analysisResult = parseAnalysisResult(data);
       const leaderboardPlacement = await saveScore(analysisResult.score);
+      if (videoMd5) {
+        const cacheKey = makeCacheKey(videoMd5, pointToAnalyze);
+        await setCachedAnalysis(cacheKey, analysisResult);
+      }
       navigation.replace('Result', {
         playerName,
         result: analysisResult,

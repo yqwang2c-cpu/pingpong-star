@@ -17,4 +17,5 @@ export interface AnalyzeSessionPreview {
 export interface LeaderboardPlacement {
   qualified: boolean;
   rank: number | null;
+  celebrate?: boolean;
 }
