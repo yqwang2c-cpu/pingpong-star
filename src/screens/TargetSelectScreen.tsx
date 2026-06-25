@@ -8,6 +8,7 @@ import {
   Image,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -75,9 +76,16 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   const previewScale = useRef(new Animated.Value(0.97)).current;
   const pulseScale = useRef(new Animated.Value(1)).current;
   const pulseOpacity = useRef(new Animated.Value(0.8)).current;
+  const autoAnalyzeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     prepareSelectionSession(videoUri);
+    return () => {
+      if (autoAnalyzeTimeoutRef.current) {
+        clearTimeout(autoAnalyzeTimeoutRef.current);
+        autoAnalyzeTimeoutRef.current = null;
+      }
+    };
   }, [videoUri]);
 
   useEffect(() => {
@@ -259,13 +267,24 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
     const x = clamp(event.nativeEvent.locationX / previewLayout.width, 0, 1);
     const y = clamp(event.nativeEvent.locationY / previewLayout.height, 0, 1);
-    setSelectedPoint({ x, y });
+    const point = { x, y };
+    setSelectedPoint(point);
     setErrorMessage('');
+
+    if (screenState === 'ready' && sessionPreview) {
+      if (autoAnalyzeTimeoutRef.current) {
+        clearTimeout(autoAnalyzeTimeoutRef.current);
+      }
+      autoAnalyzeTimeoutRef.current = setTimeout(() => {
+        handleAnalyze(point);
+      }, 220);
+    }
   }
 
-  async function handleAnalyze() {
+  async function handleAnalyze(pointOverride?: SelectedPoint) {
     if (!sessionPreview) return;
-    if (!selectedPoint) {
+    const pointToAnalyze = pointOverride ?? selectedPoint;
+    if (!pointToAnalyze) {
       Alert.alert('Choose a player first', 'Tap the player you want to analyze in the preview image.');
       return;
     }
@@ -279,7 +298,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(selectedPoint),
+          body: JSON.stringify(pointToAnalyze),
         }
       );
 
@@ -372,96 +391,100 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] },
         ]}
       >
-        <Text style={styles.stepLabel}>Step 2</Text>
-        <Text style={styles.title}>Tap the player to score</Text>
-        <Text style={styles.subtitle}>
-          If there are multiple people in the frame, tap the one you want to analyze. The app will focus the scoring around that player.
-        </Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Text style={styles.stepLabel}>Step 2</Text>
+          <Text style={styles.title}>Tap the player to score</Text>
+          <Text style={styles.subtitle}>
+            If there are multiple people in the frame, tap the one you want to analyze. The app will focus the scoring around that player.
+          </Text>
 
-        <Animated.View style={[styles.previewCard, { transform: [{ scale: previewScale }] }]}>
-          <View style={styles.previewHeader}>
-            <Text style={styles.previewTitle}>Player preview</Text>
-            <Text style={styles.previewCaption}>Tap once to set the target</Text>
-          </View>
-          <Pressable
+          <Animated.View style={[styles.previewCard, { transform: [{ scale: previewScale }] }]}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle}>Player preview</Text>
+              <Text style={styles.previewCaption}>Tap once to set the target</Text>
+            </View>
+            <Pressable
+              style={[
+                styles.previewArea,
+                {
+                  aspectRatio:
+                    sessionPreview!.previewSize.width / sessionPreview!.previewSize.height,
+                },
+              ]}
+              onLayout={(event) => {
+                const { width, height } = event.nativeEvent.layout;
+                setPreviewLayout({ width, height });
+              }}
+              onPress={handlePreviewPress}
+            >
+              <Image
+                source={{ uri: sessionPreview!.previewImage }}
+                style={styles.previewImage}
+                resizeMode="cover"
+              />
+              {selectedPoint && (
+                <>
+                  <Animated.View
+                    style={[
+                      styles.markerPulse,
+                      {
+                        left: `${selectedPoint.x * 100}%`,
+                        top: `${selectedPoint.y * 100}%`,
+                        opacity: pulseOpacity,
+                        transform: [{ scale: pulseScale }],
+                      },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.marker,
+                      {
+                        left: `${selectedPoint.x * 100}%`,
+                        top: `${selectedPoint.y * 100}%`,
+                      },
+                    ]}
+                  />
+                </>
+              )}
+            </Pressable>
+          </Animated.View>
+
+          <Text style={styles.tipText}>
+            {selectedPoint
+              ? 'Target selected. Starting analysis...'
+              : 'Tap the player in the image to choose the target.'}
+          </Text>
+
+          {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
+        </ScrollView>
+
+        <View style={styles.actionBar}>
+          <TouchableOpacity
             style={[
-              styles.previewArea,
-              {
-                aspectRatio:
-                  sessionPreview!.previewSize.width / sessionPreview!.previewSize.height,
-              },
+              styles.primaryButton,
+              (!selectedPoint || screenState === 'submitting') && styles.disabledButton,
             ]}
-            onLayout={(event) => {
-              const { width, height } = event.nativeEvent.layout;
-              setPreviewLayout({ width, height });
-            }}
-            onPress={handlePreviewPress}
+            onPress={() => handleAnalyze()}
+            disabled={!selectedPoint || screenState === 'submitting'}
           >
-            <Image
-              source={{ uri: sessionPreview!.previewImage }}
-              style={styles.previewImage}
-              resizeMode="cover"
-            />
-            {selectedPoint && (
-              <>
-                <Animated.View
-                  style={[
-                    styles.markerPulse,
-                    {
-                      left: `${selectedPoint.x * 100}%`,
-                      top: `${selectedPoint.y * 100}%`,
-                      opacity: pulseOpacity,
-                      transform: [{ scale: pulseScale }],
-                    },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.marker,
-                    {
-                      left: `${selectedPoint.x * 100}%`,
-                      top: `${selectedPoint.y * 100}%`,
-                    },
-                  ]}
-                />
-              </>
+            {screenState === 'submitting' ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Start analysis</Text>
             )}
-          </Pressable>
-        </Animated.View>
+          </TouchableOpacity>
 
-        <Text style={styles.tipText}>
-          {selectedPoint
-            ? 'Target selected. You can start the analysis now.'
-            : 'Tap the player in the image to choose the target.'}
-        </Text>
+          <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
+            <Text style={styles.secondaryButtonText}>Choose another video</Text>
+          </TouchableOpacity>
 
-        {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
-
-        <TouchableOpacity
-          style={[
-            styles.primaryButton,
-            (!selectedPoint || screenState === 'submitting') && styles.disabledButton,
-          ]}
-          onPress={handleAnalyze}
-          disabled={!selectedPoint || screenState === 'submitting'}
-        >
-          {screenState === 'submitting' ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Start analysis</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
-          <Text style={styles.secondaryButtonText}>Choose another video</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.ghostButton}
-          onPress={() => navigation.navigate('Record', { playerName })}
-        >
-          <Text style={styles.ghostButtonText}>Record a new clip</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.ghostButton}
+            onPress={() => navigation.navigate('Record', { playerName })}
+          >
+            <Text style={styles.ghostButtonText}>Record a new clip</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
     </SafeAreaView>
   );
@@ -494,7 +517,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: 28,
+    paddingBottom: 16,
+  },
+  scrollContent: {
+    paddingBottom: 220,
   },
   centered: {
     flex: 1,
@@ -605,6 +631,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 10,
+  },
+  actionBar: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    bottom: 14,
+    gap: 12,
   },
   loadingText: {
     fontSize: 16,
