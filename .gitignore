@@ -55,3 +55,10 @@ yarn-error.*
 Library/
 tmp-eas-inspect/
 build.html
+.eas-cache/
+.eas-cli-inspect/
+.tmp-eas-cli/
+.tmp-npm/
+package/
+mock-eas.js
+run-eas.js
