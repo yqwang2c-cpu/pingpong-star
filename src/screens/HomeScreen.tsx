@@ -199,7 +199,7 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.eyebrow}>Smart training for young players</Text>
           <Text style={styles.title}>PingPong Star</Text>
           <Text style={styles.subtitle}>
-            Record or upload a short practice clip, tap the player to analyze, and get instant AI coaching.
+            Record or upload a short clip, then tap the player to analyze.
           </Text>
           <View style={styles.heroStats}>
             <View style={styles.statPill}>
@@ -221,15 +221,15 @@ export default function HomeScreen({ navigation }: Props) {
           ]}
         >
           <View style={styles.cardHeader}>
-            <Text style={styles.cardEyebrow}>Live ranking</Text>
-            <Text style={styles.leaderboardTitle}>Weekly Top 5 ranks</Text>
+            <Text style={styles.cardEyebrow}>All-time ranking</Text>
+            <Text style={styles.leaderboardTitle}>Top ranks</Text>
           </View>
 
           <View style={styles.chartRow}>
             {loading ? (
               <ActivityIndicator size="small" color="#5B8CFF" />
             ) : leaderboard.length === 0 ? (
-              <Text style={styles.emptyText}>No scores yet. Upload a clip and claim the first spot.</Text>
+              <Text style={styles.emptyText}>No scores yet.</Text>
             ) : (
               <ScrollView
                 horizontal
@@ -286,7 +286,7 @@ export default function HomeScreen({ navigation }: Props) {
             >
               <Text style={styles.buttonIcon}>🎥</Text>
               <Text style={styles.actionTitle}>Record</Text>
-              <Text style={styles.actionSubtitle}>Capture a fresh training video with a 10-second limit.</Text>
+              <Text style={styles.actionSubtitle}>10-second limit.</Text>
             </TouchableOpacity>
           </View>
 
@@ -298,14 +298,12 @@ export default function HomeScreen({ navigation }: Props) {
             >
               <Text style={styles.buttonIcon}>📂</Text>
               <Text style={styles.actionTitle}>Upload</Text>
-              <Text style={styles.actionSubtitle}>Choose an existing clip, then tap the player to score.</Text>
+              <Text style={styles.actionSubtitle}>Pick a clip and tap the player.</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
-        <Text style={styles.footerHint}>
-          Tip: the app celebrates with fireworks only when this result really enters the leaderboard.
-        </Text>
+        <Text style={styles.footerHint}>Fireworks show only when you enter the leaderboard.</Text>
       </View>
 
       <Modal

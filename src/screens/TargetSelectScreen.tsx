@@ -395,13 +395,13 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           <Text style={styles.stepLabel}>Step 2</Text>
           <Text style={styles.title}>Tap the player to score</Text>
           <Text style={styles.subtitle}>
-            If there are multiple people in the frame, tap the one you want to analyze. The app will focus the scoring around that player.
+            Tap the player you want to analyze.
           </Text>
 
           <Animated.View style={[styles.previewCard, { transform: [{ scale: previewScale }] }]}>
             <View style={styles.previewHeader}>
               <Text style={styles.previewTitle}>Player preview</Text>
-              <Text style={styles.previewCaption}>Tap once to set the target</Text>
+              <Text style={styles.previewCaption}>Tap to select</Text>
             </View>
             <Pressable
               style={[
@@ -451,8 +451,8 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
           <Text style={styles.tipText}>
             {selectedPoint
-              ? 'Target selected. Starting analysis...'
-              : 'Tap the player in the image to choose the target.'}
+              ? 'Starting analysis...'
+              : 'Tap the player to select.'}
           </Text>
 
           {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
@@ -462,6 +462,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           <TouchableOpacity
             style={[
               styles.primaryButton,
+              styles.actionButton,
               (!selectedPoint || screenState === 'submitting') && styles.disabledButton,
             ]}
             onPress={() => handleAnalyze()}
@@ -474,12 +475,12 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
+          <TouchableOpacity style={[styles.secondaryButton, styles.actionButton]} onPress={handlePickAnotherVideo}>
             <Text style={styles.secondaryButtonText}>Choose another video</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.ghostButton}
+            style={[styles.ghostButton, styles.actionButton]}
             onPress={() => navigation.navigate('Record', { playerName })}
           >
             <Text style={styles.ghostButtonText}>Record a new clip</Text>
@@ -520,7 +521,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   scrollContent: {
-    paddingBottom: 220,
+    paddingBottom: 280,
   },
   centered: {
     flex: 1,
@@ -621,7 +622,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#D8E4FA',
     textAlign: 'center',
-    marginTop: 18,
+    marginTop: 14,
     marginBottom: 10,
     lineHeight: 22,
   },
@@ -637,7 +638,18 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 14,
+    padding: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(8, 17, 32, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
     gap: 12,
+  },
+  actionButton: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 420,
+    marginTop: 0,
   },
   loadingText: {
     fontSize: 16,
@@ -655,7 +667,6 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   primaryButton: {
-    marginTop: 10,
     backgroundColor: '#5B8CFF',
     borderRadius: 999,
     paddingVertical: 16,
@@ -675,7 +686,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   secondaryButton: {
-    marginTop: 12,
     backgroundColor: '#11B89A',
     borderRadius: 999,
     paddingVertical: 15,
@@ -687,7 +697,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   ghostButton: {
-    marginTop: 12,
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',

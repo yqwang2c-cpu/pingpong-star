@@ -297,7 +297,7 @@ export default function ResultScreen({ navigation, route }: Props) {
           <Text style={styles.heroSubtitle}>
             {didEnterLeaderboard && leaderboardPlacement.rank
               ? `Live leaderboard rank: #${leaderboardPlacement.rank}`
-              : 'This result was saved. Upload another clip anytime for a fresh analysis.'}
+              : 'Saved. Upload another clip anytime.'}
           </Text>
           <View style={styles.heroMetaRow}>
             <View style={styles.metaChip}>
@@ -328,7 +328,7 @@ export default function ResultScreen({ navigation, route }: Props) {
               <Text style={styles.scoreSuffix}>/ 100</Text>
             </Animated.View>
           </Animated.View>
-          {result.frames.length > 0 ? <Text style={styles.framesInfo}>Analyzed {result.frames.length} extracted frames</Text> : null}
+          {result.frames.length > 0 ? <Text style={styles.framesInfo}>Analyzed {result.frames.length} frames</Text> : null}
         </Animated.View>
 
         {didEnterLeaderboard && (

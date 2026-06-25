@@ -8,6 +8,22 @@
         "buildType": "apk"
       }
     },
+    "preview-arm64": {
+      "env": {
+        "ANDROID_BUILD_ARCHS": "arm64-v8a"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview-armv7": {
+      "env": {
+        "ANDROID_BUILD_ARCHS": "armeabi-v7a"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "production": {
       "android": {
         "buildType": "app-bundle"
