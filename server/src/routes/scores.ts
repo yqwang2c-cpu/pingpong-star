@@ -4,7 +4,10 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 
 const router = Router();
-const SCORES_FILE = path.join(__dirname, '../../scores.json');
+const FALLBACK_SCORES_FILE = path.join(__dirname, '../../scores.json');
+const SCORES_FILE =
+  process.env.SCORES_FILE ??
+  (fs.existsSync('/var/data') ? '/var/data/scores.json' : FALLBACK_SCORES_FILE);
 
 interface ScoreEntry {
   id?: string;
@@ -14,6 +17,14 @@ interface ScoreEntry {
 }
 
 type RankedScoreEntry = ScoreEntry & { rank: number };
+
+function ensureScoresDirectoryExists() {
+  try {
+    fs.mkdirSync(path.dirname(SCORES_FILE), { recursive: true });
+  } catch {
+    return;
+  }
+}
 
 function readScores(): ScoreEntry[] {
   if (!fs.existsSync(SCORES_FILE)) return [];
@@ -69,6 +80,7 @@ router.post('/', (req, res): void => {
   };
 
   scores.push(entry);
+  ensureScoresDirectoryExists();
   fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2), 'utf-8');
 
   const rankedAll = rankScores(scores);

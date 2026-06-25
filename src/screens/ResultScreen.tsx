@@ -281,7 +281,6 @@ export default function ResultScreen({ navigation, route }: Props) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.orbTop} />
       <View style={styles.orbBottom} />
-      <FireworksOverlay active={didEnterLeaderboard} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Animated.View
           style={[
@@ -388,6 +387,7 @@ export default function ResultScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+      <FireworksOverlay active={didEnterLeaderboard} />
     </SafeAreaView>
   );
 }
@@ -421,6 +421,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 220,
+    zIndex: 20,
+    elevation: 20,
   },
   fireworkParticle: {
     position: 'absolute',
