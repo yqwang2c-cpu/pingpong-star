@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
@@ -30,8 +31,11 @@ const MAX_BAR_HEIGHT = 160;
 const MAX_SCORE = 100;
 
 interface PlayerScore {
+  id?: string;
   name: string;
   score: number;
+  createdAt?: number;
+  rank?: number;
 }
 
 export default function HomeScreen({ navigation }: Props) {
@@ -46,7 +50,7 @@ export default function HomeScreen({ navigation }: Props) {
   const leaderboardTranslateY = useRef(new Animated.Value(26)).current;
   const actionsOpacity = useRef(new Animated.Value(0)).current;
   const actionsTranslateY = useRef(new Animated.Value(32)).current;
-  const barAnimations = useRef(Array.from({ length: 5 }, () => new Animated.Value(0))).current;
+  const barAnimations = useRef<Animated.Value[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -102,11 +106,21 @@ export default function HomeScreen({ navigation }: Props) {
   }, [actionsOpacity, actionsTranslateY, heroOpacity, heroTranslateY, leaderboardOpacity, leaderboardTranslateY]);
 
   useEffect(() => {
-    barAnimations.forEach((value) => value.setValue(0));
+    const required = leaderboard.length;
+    while (barAnimations.current.length < required) {
+      barAnimations.current.push(new Animated.Value(0));
+    }
+
+    barAnimations.current.forEach((value, index) => {
+      if (index < required) value.setValue(0);
+    });
+
+    if (required === 0) return;
+
     Animated.stagger(
       90,
       leaderboard.map((_, index) =>
-        Animated.timing(barAnimations[index], {
+        Animated.timing(barAnimations.current[index], {
           toValue: 1,
           duration: 520,
           easing: Easing.out(Easing.cubic),
@@ -114,14 +128,18 @@ export default function HomeScreen({ navigation }: Props) {
         })
       )
     ).start();
-  }, [barAnimations, leaderboard]);
+  }, [leaderboard]);
 
   async function fetchLeaderboard() {
     setLoading(true);
     try {
       const res = await fetch(`${SERVER_URL}/api/scores`);
       const data = await res.json();
-      setLeaderboard(data.scores ?? []);
+      const scores = (data.scores ?? []) as PlayerScore[];
+      while (barAnimations.current.length < scores.length) {
+        barAnimations.current.push(new Animated.Value(0));
+      }
+      setLeaderboard(scores);
     } catch {
       setLeaderboard([]);
     } finally {
@@ -188,7 +206,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.statLabel}>10s max</Text>
             </View>
             <View style={styles.statPill}>
-              <Text style={styles.statLabel}>Top 5 leaderboard</Text>
+              <Text style={styles.statLabel}>Top 5 ranks</Text>
             </View>
             <View style={styles.statPill}>
               <Text style={styles.statLabel}>English feedback</Text>
@@ -204,7 +222,7 @@ export default function HomeScreen({ navigation }: Props) {
         >
           <View style={styles.cardHeader}>
             <Text style={styles.cardEyebrow}>Live ranking</Text>
-            <Text style={styles.leaderboardTitle}>Weekly Top 5</Text>
+            <Text style={styles.leaderboardTitle}>Weekly Top 5 ranks</Text>
           </View>
 
           <View style={styles.chartRow}>
@@ -213,35 +231,43 @@ export default function HomeScreen({ navigation }: Props) {
             ) : leaderboard.length === 0 ? (
               <Text style={styles.emptyText}>No scores yet. Upload a clip and claim the first spot.</Text>
             ) : (
-              leaderboard.map((player, index) => {
-                const barHeight = (player.score / MAX_SCORE) * MAX_BAR_HEIGHT;
-                const barColor =
-                  index === 0 ? '#F7B500' : index === 1 ? '#7DD3FC' : index === 2 ? '#A78BFA' : '#5B8CFF';
-                return (
-                  <View key={index} style={styles.barColumn}>
-                    {index === 0 ? <Text style={styles.topBadge}>★</Text> : <View style={styles.badgeSpacer} />}
-                    <Text style={styles.barScore}>{player.score}</Text>
-                    <Animated.View
-                      style={[
-                        styles.bar,
-                        {
-                          backgroundColor: barColor,
-                          height: barAnimations[index].interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, barHeight],
-                          }),
-                          opacity: barAnimations[index].interpolate({
-                            inputRange: [0, 0.2, 1],
-                            outputRange: [0.4, 0.7, 1],
-                          }),
-                        },
-                      ]}
-                    />
-                    <Text style={styles.barRank}>#{index + 1}</Text>
-                    <Text style={styles.barName}>{player.name}</Text>
-                  </View>
-                );
-              })
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chartContent}
+              >
+                {leaderboard.map((player, index) => {
+                  const rank = player.rank ?? index + 1;
+                  const barHeight = (player.score / MAX_SCORE) * MAX_BAR_HEIGHT;
+                  const barColor =
+                    rank === 1 ? '#F7B500' : rank === 2 ? '#7DD3FC' : rank === 3 ? '#A78BFA' : '#5B8CFF';
+
+                  return (
+                    <View key={`${player.id ?? ''}-${player.name}-${player.score}-${player.createdAt ?? index}`} style={styles.barColumn}>
+                      {rank === 1 ? <Text style={styles.topBadge}>★</Text> : <View style={styles.badgeSpacer} />}
+                      <Text style={styles.barScore}>{player.score}</Text>
+                      <Animated.View
+                        style={[
+                          styles.bar,
+                          {
+                            backgroundColor: barColor,
+                            height: barAnimations.current[index].interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, barHeight],
+                            }),
+                            opacity: barAnimations.current[index].interpolate({
+                              inputRange: [0, 0.2, 1],
+                              outputRange: [0.4, 0.7, 1],
+                            }),
+                          },
+                        ]}
+                      />
+                      <Text style={styles.barRank}>#{rank}</Text>
+                      <Text style={styles.barName}>{player.name}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
             )}
           </View>
         </Animated.View>
@@ -434,6 +460,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     height: MAX_BAR_HEIGHT + 64,
     paddingTop: 10,
+  },
+  chartContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 6,
   },
   barColumn: {
     alignItems: 'center',

@@ -13,6 +13,8 @@ interface ScoreEntry {
   createdAt: number;
 }
 
+type RankedScoreEntry = ScoreEntry & { rank: number };
+
 function readScores(): ScoreEntry[] {
   if (!fs.existsSync(SCORES_FILE)) return [];
   try {
@@ -22,20 +24,33 @@ function readScores(): ScoreEntry[] {
   }
 }
 
-function getTopFiveScores(allScores: ScoreEntry[]): ScoreEntry[] {
-  return [...allScores]
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.createdAt - b.createdAt;
-    })
-    .slice(0, 5);
+function rankScores(allScores: ScoreEntry[]): RankedScoreEntry[] {
+  const sorted = [...allScores].sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.createdAt - b.createdAt;
+  });
+
+  let previousScore: number | null = null;
+  let previousRank = 0;
+
+  return sorted.map((entry, index) => {
+    const rank = previousScore === entry.score ? previousRank : index + 1;
+    previousScore = entry.score;
+    previousRank = rank;
+
+    return { ...entry, rank };
+  });
+}
+
+function getLeaderboard(scores: ScoreEntry[]): RankedScoreEntry[] {
+  return rankScores(scores).filter((entry) => entry.rank <= 5);
 }
 
 router.get('/', (_req, res) => {
   const all = readScores();
-  const top5 = getTopFiveScores(all);
+  const leaderboard = getLeaderboard(all);
 
-  res.json({ scores: top5 });
+  res.json({ scores: leaderboard });
 });
 
 router.post('/', (req, res): void => {
@@ -56,16 +71,18 @@ router.post('/', (req, res): void => {
   scores.push(entry);
   fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2), 'utf-8');
 
-  const top5 = getTopFiveScores(scores);
-  const rankIndex = top5.findIndex((item) => item.id === entry.id);
+  const rankedAll = rankScores(scores);
+  const leaderboard = rankedAll.filter((item) => item.rank <= 5);
+  const rankedEntry = rankedAll.find((item) => item.id === entry.id) ?? null;
+  const qualified = rankedEntry ? rankedEntry.rank <= 5 : false;
 
   res.json({
     status: 'ok',
     entry,
     leaderboard: {
-      qualified: rankIndex !== -1,
-      rank: rankIndex === -1 ? null : rankIndex + 1,
-      scores: top5,
+      qualified,
+      rank: qualified && rankedEntry ? rankedEntry.rank : null,
+      scores: leaderboard,
     },
   });
 });

@@ -292,7 +292,7 @@ export default function ResultScreen({ navigation, route }: Props) {
           <Text style={styles.heroEyebrow}>Analysis complete</Text>
           <Text style={styles.playerName}>{playerName}</Text>
           <Text style={styles.heroTitle}>
-            {didEnterLeaderboard ? 'Fireworks! This score entered the Top 5.' : 'Great effort. Keep building consistency.'}
+            {didEnterLeaderboard ? 'Fireworks! This score entered the Top 5 ranks.' : 'Great effort. Keep building consistency.'}
           </Text>
           <Text style={styles.heroSubtitle}>
             {didEnterLeaderboard && leaderboardPlacement.rank
@@ -307,25 +307,26 @@ export default function ResultScreen({ navigation, route }: Props) {
               <Text style={styles.metaChipText}>{result.frames.length} frames reviewed</Text>
             </View>
           </View>
-          <Animated.View
-            style={[
-              styles.scoreRing,
-              {
-                transform: [{ scale: scorePulse }],
-                borderColor: scoreGlow.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['rgba(91, 140, 255, 0.14)', 'rgba(247, 181, 0, 0.45)'],
-                }),
-                shadowOpacity: scoreGlow.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.12, 0.28],
-                }),
-              },
-            ]}
-          >
-            <Text style={styles.scoreLabel}>Overall score</Text>
-            <Text style={styles.score}>{displayScore}</Text>
-            <Text style={styles.scoreSuffix}>/ 100</Text>
+          <Animated.View style={[styles.scoreRingWrapper, { transform: [{ scale: scorePulse }] }]}>
+            <Animated.View
+              style={[
+                styles.scoreRing,
+                {
+                  borderColor: scoreGlow.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['rgba(91, 140, 255, 0.14)', 'rgba(247, 181, 0, 0.45)'],
+                  }),
+                  shadowOpacity: scoreGlow.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.12, 0.28],
+                  }),
+                },
+              ]}
+            >
+              <Text style={styles.scoreLabel}>Overall score</Text>
+              <Text style={styles.score}>{displayScore}</Text>
+              <Text style={styles.scoreSuffix}>/ 100</Text>
+            </Animated.View>
           </Animated.View>
           {result.frames.length > 0 ? <Text style={styles.framesInfo}>Analyzed {result.frames.length} extracted frames</Text> : null}
         </Animated.View>
@@ -500,13 +501,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F7FAFF',
-    marginBottom: 12,
     borderWidth: 8,
     borderColor: 'rgba(91, 140, 255, 0.18)',
     shadowColor: '#F7B500',
     shadowOffset: { width: 0, height: 14 },
     shadowRadius: 26,
     elevation: 10,
+  },
+  scoreRingWrapper: {
+    width: 190,
+    height: 190,
+    borderRadius: 95,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   scoreLabel: {
     fontSize: 14,
