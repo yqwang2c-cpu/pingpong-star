@@ -1,4 +1,12 @@
 server/
-DEPLOY_APK.md
-README.md
+.tmp-home/
+.eas-cache/
+.eas-cli-inspect/
+.tmp-eas-cli/
+.tmp-npm/
+.tmp/
+.npm/
+.npm-cache/
+server/node_modules/
+server/dist/
 **/*.md
