@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
   Animated,
   Easing,
 } from 'react-native';
@@ -14,6 +13,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
 import { MAX_VIDEO_DURATION_SECONDS } from '../utils/video';
+import { colors, fontSize, radius, space } from '../theme';
 
 type RecordNavProp = StackNavigationProp<RootStackParamList, 'Record'>;
 type RecordRouteProp = RouteProp<RootStackParamList, 'Record'>;
@@ -159,6 +159,7 @@ export default function RecordScreen({ navigation, route }: Props) {
   const handleStopRecording = useCallback(() => {
     cameraRef.current?.stopRecording();
   }, []);
+
   const handleStartAnalysis = useCallback(() => {
     if (!videoUri) return;
     navigation.navigate('TargetSelect', { videoUri, playerName });
@@ -176,40 +177,47 @@ export default function RecordScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.permissionIcon}>🎥</Text>
+          <View style={styles.permissionBadge} />
           <Text style={styles.permTitle}>Camera access is required</Text>
           <Text style={styles.permText}>
-            Please allow both camera and microphone permissions so the app can record a full practice clip.
+            Please allow both camera and microphone permissions so the app can record a full
+            practice clip.
           </Text>
           <TouchableOpacity
-            style={styles.permButton}
+            style={styles.primaryButton}
             onPress={async () => {
               await requestCameraPermission();
               await requestMicPermission();
             }}
           >
-            <Text style={styles.permButtonText}>Grant access</Text>
+            <Text style={styles.primaryButtonText}>Grant access</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.textButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.textButtonText}>Back home</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  const remainingHint =
+    recordState === 'recording'
+      ? 'Tap to stop'
+      : recordState === 'stopped'
+        ? 'Saved. Ready to analyze.'
+        : 'Keep the whole body in frame';
+
   return (
     <SafeAreaView style={styles.safe}>
+      <CameraView ref={cameraRef} style={styles.camera} facing="back" mode="video" />
+
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
+        activeOpacity={0.85}
       >
-        <Text style={styles.backText}>← Home</Text>
+        <Text style={styles.backText}>Back</Text>
       </TouchableOpacity>
-
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing="back"
-        mode="video"
-      />
 
       <Animated.View
         style={[
@@ -217,11 +225,13 @@ export default function RecordScreen({ navigation, route }: Props) {
           { opacity: topPanelOpacity, transform: [{ translateY: topPanelTranslateY }] },
         ]}
       >
-        <Text style={styles.playerChip}>Player: {playerName}</Text>
-        <Text style={styles.recordTitle}>Record a clean rally clip</Text>
-        <Text style={styles.recordSubtitle}>
-          Keep the full body visible and stay within the 10-second limit for the best analysis.
-        </Text>
+        <View style={styles.playerPill}>
+          <View style={styles.playerAvatar}>
+            <Text style={styles.playerAvatarText}>{playerName.slice(0, 1)}</Text>
+          </View>
+          <Text style={styles.playerName}>{playerName}</Text>
+        </View>
+        <Text style={styles.recordTitle}>Record a clean rally</Text>
       </Animated.View>
 
       <Animated.View
@@ -230,65 +240,65 @@ export default function RecordScreen({ navigation, route }: Props) {
           { opacity: panelOpacity, transform: [{ translateY: panelTranslateY }] },
         ]}
       >
+        <View style={styles.timerRow}>
+          {recordState === 'recording' ? (
+            <Animated.View style={[styles.liveDot, { opacity: liveOpacity }]} />
+          ) : null}
+          <Text style={styles.timerText}>
+            {formatTime(elapsed)} / {formatTime(MAX_VIDEO_DURATION_SECONDS)}
+          </Text>
+        </View>
+
         <View style={styles.progressTrack}>
-          <Animated.View
+          <View
             style={[
               styles.progressFill,
               {
                 width: `${Math.min(100, (elapsed / MAX_VIDEO_DURATION_SECONDS) * 100)}%`,
-                opacity: recordState === 'idle' ? 0.4 : 1,
+                opacity: recordState === 'idle' ? 0.45 : 1,
               },
             ]}
           />
         </View>
-        {recordState === 'idle' && (
-          <>
-            <Text style={styles.controlHint}>Ready when you are</Text>
-            <Animated.View style={{ transform: [{ scale: recordPulse }] }}>
-              <TouchableOpacity style={styles.startButton} onPress={handleStartRecording}>
-                <View style={styles.redDot} />
-                <Text style={styles.startText}>Start recording</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
 
-        {recordState === 'recording' && (
-          <>
-            <View style={styles.timerRow}>
-              <Animated.View style={[styles.blinkDot, { opacity: liveOpacity }]} />
-              <Text style={styles.timerText}>
-                {formatTime(elapsed)} / 00:10
-              </Text>
-            </View>
-            <Text style={styles.liveHint}>Recording in progress</Text>
-            <Animated.View style={{ transform: [{ scale: recordPulse }] }}>
-              <TouchableOpacity style={styles.stopButton} onPress={handleStopRecording}>
-                <Text style={styles.stopIcon}>⏹</Text>
-                <Text style={styles.stopText}>Stop</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
+        {recordState === 'idle' || recordState === 'recording' ? (
+          <Animated.View style={{ transform: [{ scale: recordPulse }] }}>
+            <TouchableOpacity
+              style={styles.recordRing}
+              onPress={recordState === 'recording' ? handleStopRecording : handleStartRecording}
+              activeOpacity={0.9}
+            >
+              <View
+                style={[
+                  styles.recordButton,
+                  recordState === 'recording' && styles.recordButtonActive,
+                ]}
+              >
+                <View style={styles.recordButtonInner} />
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : null}
 
-        {recordState === 'stopped' && (
-          <>
-            <Text style={styles.doneText}>Clip saved: {formatTime(elapsed)} / 00:10</Text>
-            <TouchableOpacity style={styles.analyzeButton} onPress={handleStartAnalysis}>
-              <Text style={styles.analyzeText}>Analyze this clip</Text>
+        <Text style={styles.controlHint}>{remainingHint}</Text>
+
+        {recordState === 'stopped' ? (
+          <View style={styles.stoppedActions}>
+            <TouchableOpacity style={styles.primaryButton} onPress={handleStartAnalysis}>
+              <Text style={styles.primaryButtonText}>Analyze this clip</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.retakeButton}
+              style={styles.textButton}
               onPress={() => {
                 setVideoUri(null);
                 setElapsed(0);
                 setRecordState('idle');
               }}
             >
-              <Text style={styles.retakeText}>Record again</Text>
+              <Text style={styles.textButtonText}>Record again</Text>
             </TouchableOpacity>
-          </>
-        )}
+          </View>
+        ) : null}
       </Animated.View>
     </SafeAreaView>
   );
@@ -297,224 +307,201 @@ export default function RecordScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#04070D',
+    backgroundColor: colors.camera,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#07111E',
-    gap: 14,
-    paddingHorizontal: 28,
+    backgroundColor: colors.canvas,
+    paddingHorizontal: space.xl,
+    gap: space.sm,
   },
   loadingText: {
-    color: '#E8F0FF',
-    fontSize: 16,
+    fontSize: fontSize.body,
+    color: colors.body,
   },
-  permissionIcon: {
-    fontSize: 42,
+  permissionBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 3,
+    borderColor: colors.primarySoft,
+    marginBottom: space.xs,
   },
   permTitle: {
-    fontSize: 22,
+    fontSize: fontSize.card,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.ink,
+    textAlign: 'center',
   },
   permText: {
-    fontSize: 16,
-    color: '#B8C7E0',
+    fontSize: fontSize.body,
+    color: colors.body,
     textAlign: 'center',
-    lineHeight: 24,
-  },
-  permButton: {
-    marginTop: 4,
-    backgroundColor: '#5B8CFF',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 999,
-  },
-  permButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 56,
-    left: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(7, 17, 30, 0.72)',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  backText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    lineHeight: 21,
   },
   camera: {
     flex: 1,
   },
+  backButton: {
+    position: 'absolute',
+    top: 56,
+    left: space.md,
+    zIndex: 10,
+    backgroundColor: 'rgba(15,36,23,0.62)',
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  backText: {
+    color: colors.onCamera,
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+  },
   topPanel: {
     position: 'absolute',
-    top: 112,
-    left: 20,
-    right: 20,
+    top: 104,
+    left: space.md,
+    right: space.md,
     zIndex: 5,
-    borderRadius: 24,
-    padding: 18,
-    backgroundColor: 'rgba(7, 17, 30, 0.64)',
+    borderRadius: radius.large,
+    padding: space.md,
+    backgroundColor: 'rgba(15,36,23,0.68)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.14)',
   },
-  playerChip: {
+  playerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(91, 140, 255, 0.18)',
-    color: '#DCE7FF',
-    fontSize: 12,
+    backgroundColor: 'rgba(255,107,44,0.28)',
+    borderRadius: radius.pill,
+    paddingHorizontal: space.xs,
+    paddingVertical: 4,
+    paddingRight: space.sm,
+    marginBottom: space.xs,
+  },
+  playerAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.xs,
+  },
+  playerAvatarText: {
+    fontSize: fontSize.micro,
     fontWeight: '700',
-    marginBottom: 10,
+    color: colors.surface,
+  },
+  playerName: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.onCamera,
   },
   recordTitle: {
-    color: '#FFFFFF',
-    fontSize: 24,
+    color: colors.onCamera,
+    fontSize: fontSize.card,
     fontWeight: '700',
-    marginBottom: 8,
-  },
-  recordSubtitle: {
-    color: '#C6D2E8',
-    fontSize: 14,
-    lineHeight: 21,
   },
   controls: {
     position: 'absolute',
-    bottom: 18,
-    left: 16,
-    right: 16,
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 24,
-    backgroundColor: 'rgba(7, 17, 30, 0.78)',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    left: space.md,
+    right: space.md,
+    bottom: 36,
     alignItems: 'center',
-    gap: 12,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginBottom: 2,
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#11B89A',
-  },
-  controlHint: {
-    color: '#BFD0EB',
-    fontSize: 14,
-  },
-  startButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF5E7D',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 999,
-    gap: 10,
-    shadowColor: '#FF5E7D',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 8,
-  },
-  redDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#fff',
-  },
-  startText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    gap: space.sm,
   },
   timerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: space.xs,
   },
-  blinkDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF5E7D',
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
   },
   timerText: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
+    color: colors.onCamera,
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
-  liveHint: {
-    color: '#BFD0EB',
-    fontSize: 13,
+  progressTrack: {
+    width: 168,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    overflow: 'hidden',
   },
-  stopButton: {
-    flexDirection: 'row',
+  progressFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  recordRing: {
+    width: 116,
+    height: 116,
+    borderRadius: 58,
+    borderWidth: 7,
+    borderColor: 'rgba(255,255,255,0.28)',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    paddingHorizontal: 28,
-    paddingVertical: 13,
-    borderRadius: 999,
-    gap: 8,
+    justifyContent: 'center',
+    marginTop: space.xs,
   },
-  stopIcon: {
-    fontSize: 20,
-    color: '#fff',
-  },
-  stopText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  doneText: {
-    color: '#fff',
-    fontSize: 15,
-    marginBottom: 4,
-    fontWeight: '600',
-  },
-  analyzeButton: {
-    backgroundColor: '#11B89A',
-    paddingHorizontal: 36,
-    paddingVertical: 15,
-    borderRadius: 999,
-    minWidth: 220,
+  recordButton: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: colors.primary,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  analyzeText: {
-    color: '#fff',
-    fontSize: 18,
+  recordButtonActive: {
+    backgroundColor: colors.danger,
+  },
+  recordButtonInner: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+  },
+  controlHint: {
+    fontSize: fontSize.caption,
+    color: 'rgba(255,255,255,0.78)',
+  },
+  stoppedActions: {
+    width: '100%',
+    alignItems: 'center',
+    gap: space.xs,
+    marginTop: space.xs,
+  },
+  primaryButton: {
+    width: '100%',
+    maxWidth: 320,
+    height: 52,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: colors.surface,
+    fontSize: fontSize.button,
     fontWeight: '700',
   },
-  retakeButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
+  textButton: {
+    paddingVertical: space.xs,
   },
-  retakeText: {
-    color: 'rgba(255,255,255,0.78)',
-    fontSize: 14,
+  textButtonText: {
+    color: colors.primarySoft,
+    fontSize: fontSize.body,
     fontWeight: '600',
   },
 });

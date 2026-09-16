@@ -14,6 +14,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
 import { getVideoDurationLimitMessage, pickVideoFromLibrary } from '../utils/video';
+import { colors, fontSize, radius, space } from '../theme';
 
 type ResultNavProp = StackNavigationProp<RootStackParamList, 'Result'>;
 type ResultRouteProp = RouteProp<RootStackParamList, 'Result'>;
@@ -34,7 +35,7 @@ const FIREWORK_PARTICLES = Array.from({ length: 24 }, (_, index) => {
     burstSide,
     angle,
     radius,
-    color: ['#F7B500', '#FF5E7D', '#7DD3FC', '#A78BFA', '#11B89A'][index % 5],
+    color: [colors.gold, '#FF5E7D', colors.primarySoft, '#A78BFA', '#7DD3FC'][index % 5],
     icon: index % 4 === 0 ? '✦' : index % 4 === 1 ? '✺' : '•',
     delay: burstIndex * 70,
   };
@@ -170,27 +171,24 @@ export default function ResultScreen({ navigation, route }: Props) {
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const heroTranslateY = useRef(new Animated.Value(20)).current;
   const scorePulse = useRef(new Animated.Value(1)).current;
-  const scoreGlow = useRef(new Animated.Value(didEnterLeaderboard ? 1 : 0.6)).current;
   const feedbackOpacity = useRef(new Animated.Value(0)).current;
   const feedbackTranslateY = useRef(new Animated.Value(26)).current;
   const actionsOpacity = useRef(new Animated.Value(0)).current;
   const actionsTranslateY = useRef(new Animated.Value(26)).current;
   const scoreCounter = useRef(new Animated.Value(0)).current;
   const [displayScore, setDisplayScore] = React.useState(0);
-  const [detailsExpanded, setDetailsExpanded] = React.useState(false);
+
   const strengths = useMemo(
-    () => (result.strengths.length > 0 ? result.strengths : ['No clear strengths yet.']),
+    () => (result.strengths.length > 0 ? result.strengths : ['Keep it up. Another clip will tell us more.']),
     [result.strengths]
   );
   const improvements = useMemo(
     () =>
       result.improvements.length > 0
         ? result.improvements
-        : ['Keep practicing and upload another clip for more detailed coaching.'],
+        : ['Record another rally for more detailed coaching.'],
     [result.improvements]
   );
-  const strengthHighlights = useMemo(() => strengths.slice(0, 2), [strengths]);
-  const improvementHighlights = useMemo(() => improvements.slice(0, 2), [improvements]);
 
   useEffect(() => {
     const scoreListener = scoreCounter.addListener(({ value }) => {
@@ -264,29 +262,12 @@ export default function ResultScreen({ navigation, route }: Props) {
         }),
       ])
     );
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scoreGlow, {
-          toValue: didEnterLeaderboard ? 1 : 0.75,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(scoreGlow, {
-          toValue: didEnterLeaderboard ? 0.65 : 0.55,
-          duration: 900,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-      ])
-    );
     pulseLoop.start();
-    glowLoop.start();
 
     return () => {
       scoreCounter.removeListener(scoreListener);
       pulseLoop.stop();
-      glowLoop.stop();
+      scorePulse.stopAnimation();
     };
   }, [
     actionsOpacity,
@@ -298,7 +279,6 @@ export default function ResultScreen({ navigation, route }: Props) {
     heroTranslateY,
     result.score,
     scoreCounter,
-    scoreGlow,
     scorePulse,
   ]);
 
@@ -321,64 +301,34 @@ export default function ResultScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.orbTop} />
-      <View style={styles.orbBottom} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View
           style={[
             styles.heroCard,
             { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
           ]}
         >
-          <Text style={styles.heroEyebrow}>Analysis complete</Text>
-          <Text style={styles.playerName}>{playerName}</Text>
-          <Text style={styles.heroTitle}>
-            {didEnterLeaderboard ? 'Fireworks! This score entered the Top 5 ranks.' : 'Great effort. Keep building consistency.'}
+          <Text style={styles.heroEyebrow}>ANALYSIS COMPLETE</Text>
+          <Text style={styles.playerName}>
+            {didEnterLeaderboard ? `Nice work, ${playerName}` : `Great effort, ${playerName}`}
           </Text>
-          <Text style={styles.heroSubtitle}>
-            {didEnterLeaderboard && leaderboardPlacement.rank
-              ? `Live leaderboard rank: #${leaderboardPlacement.rank}`
-              : 'Saved. Upload another clip anytime.'}
-          </Text>
-          <View style={styles.heroMetaRow}>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>{didEnterLeaderboard ? 'Leaderboard unlocked' : 'Saved to history'}</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Text style={styles.metaChipText}>{result.frames.length} frames reviewed</Text>
-            </View>
-          </View>
-          <Animated.View style={[styles.scoreRingWrapper, { transform: [{ scale: scorePulse }] }]}>
-            <Animated.View
-              style={[
-                styles.scoreRing,
-                {
-                  borderColor: scoreGlow.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['rgba(91, 140, 255, 0.14)', 'rgba(247, 181, 0, 0.45)'],
-                  }),
-                  shadowOpacity: scoreGlow.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.12, 0.28],
-                  }),
-                },
-              ]}
-            >
-              <Text style={styles.scoreLabel}>Overall score</Text>
-              <Text style={styles.score}>{displayScore}</Text>
-              <Text style={styles.scoreSuffix}>/ 100</Text>
-            </Animated.View>
-          </Animated.View>
-          {result.frames.length > 0 ? <Text style={styles.framesInfo}>Analyzed {result.frames.length} frames</Text> : null}
-        </Animated.View>
 
-        {didEnterLeaderboard && (
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>
-              New leaderboard entry {leaderboardPlacement.rank ? `#${leaderboardPlacement.rank}` : ''}
-            </Text>
-          </View>
-        )}
+          <Animated.View style={[styles.scoreDiscWrapper, { transform: [{ scale: scorePulse }] }]}>
+            <View style={styles.scoreDisc}>
+              <Text style={styles.score}>{displayScore}</Text>
+              <Text style={styles.scoreSuffix}>out of 100</Text>
+            </View>
+          </Animated.View>
+
+          {didEnterLeaderboard && leaderboardPlacement.rank ? (
+            <View style={styles.medalRow}>
+              <View style={styles.medalPill}>
+                <View style={styles.medalDot} />
+                <Text style={styles.medalText}>#{leaderboardPlacement.rank} on the board</Text>
+              </View>
+            </View>
+          ) : null}
+        </Animated.View>
 
         <Animated.View
           style={[
@@ -386,44 +336,33 @@ export default function ResultScreen({ navigation, route }: Props) {
             { opacity: feedbackOpacity, transform: [{ translateY: feedbackTranslateY }] },
           ]}
         >
-          {detailsExpanded ? (
-            <>
-              <View style={styles.feedbackCard}>
-                <Text style={styles.sectionTitle}>What went well</Text>
-                {strengths.map((item, index) => (
-                  <Text key={index} style={styles.bullet}>• {item}</Text>
-                ))}
+          <View style={styles.feedbackCard}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.checkBadge}>
+                <View style={styles.checkMark} />
               </View>
-
-              <View style={styles.feedbackCard}>
-                <Text style={styles.sectionTitle}>What to improve next</Text>
-                {improvements.map((item, index) => (
-                  <Text key={index} style={styles.bullet}>• {item}</Text>
-                ))}
-              </View>
-            </>
-          ) : (
-            <View style={styles.feedbackCard}>
-              <Text style={styles.sectionTitle}>Highlights</Text>
-              <Text style={styles.compactTitle}>What went well</Text>
-              {strengthHighlights.map((item, index) => (
-                <Text key={index} style={styles.compactBullet}>• {item}</Text>
-              ))}
-              <Text style={[styles.compactTitle, styles.compactTitleSpacing]}>Next focus</Text>
-              {improvementHighlights.map((item, index) => (
-                <Text key={index} style={styles.compactBullet}>• {item}</Text>
-              ))}
+              <Text style={styles.sectionTitle}>What went well</Text>
             </View>
-          )}
+            {strengths.map((item, index) => (
+              <Text key={index} style={styles.bullet}>
+                {item}
+              </Text>
+            ))}
+          </View>
 
-          <TouchableOpacity
-            style={styles.detailsToggle}
-            onPress={() => setDetailsExpanded((value) => !value)}
-          >
-            <Text style={styles.detailsToggleText}>
-              {detailsExpanded ? 'Hide details' : 'Show full feedback'}
-            </Text>
-          </TouchableOpacity>
+          <View style={[styles.feedbackCard, styles.feedbackCardFocus]}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.focusBadge}>
+                <Text style={styles.focusBadgeText}>!</Text>
+              </View>
+              <Text style={styles.sectionTitle}>Next focus</Text>
+            </View>
+            {improvements.map((item, index) => (
+              <Text key={index} style={styles.bullet}>
+                {item}
+              </Text>
+            ))}
+          </View>
         </Animated.View>
 
         <Animated.View
@@ -433,24 +372,21 @@ export default function ResultScreen({ navigation, route }: Props) {
           ]}
         >
           <TouchableOpacity
-            style={styles.recordAgainButton}
+            style={styles.primaryButton}
             onPress={() => navigation.navigate('Record', { playerName })}
           >
-            <Text style={styles.recordAgainText}>Record a new clip</Text>
+            <Text style={styles.primaryButtonText}>Record another clip</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryButton} onPress={pickAndUpload}>
+            <Text style={styles.secondaryButtonText}>Upload a saved video</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.uploadAgainButton}
-            onPress={pickAndUpload}
-          >
-            <Text style={styles.uploadAgainText}>Upload another video</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.homeButton}
+            style={styles.textButton}
             onPress={() => navigation.navigate('Home')}
           >
-            <Text style={styles.homeText}>Back to home</Text>
+            <Text style={styles.textButtonText}>Back home</Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
@@ -462,25 +398,179 @@ export default function ResultScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#081120',
+    backgroundColor: colors.canvas,
   },
-  orbTop: {
-    position: 'absolute',
-    top: -70,
-    left: -20,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(91, 140, 255, 0.18)',
+  scroll: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    paddingBottom: space.xl,
   },
-  orbBottom: {
-    position: 'absolute',
-    bottom: -90,
-    right: -20,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: 'rgba(17, 184, 154, 0.12)',
+  heroCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.xlarge,
+    padding: space.lg,
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  heroEyebrow: {
+    fontSize: fontSize.label,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: space.xs,
+  },
+  playerName: {
+    fontSize: fontSize.card,
+    fontWeight: '700',
+    color: colors.surface,
+    textAlign: 'center',
+    marginBottom: space.md,
+  },
+  scoreDiscWrapper: {
+    marginBottom: space.sm,
+  },
+  scoreDisc: {
+    width: 168,
+    height: 168,
+    borderRadius: 84,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  score: {
+    fontSize: fontSize.hero,
+    fontWeight: '700',
+    color: colors.primary,
+    lineHeight: 58,
+  },
+  scoreSuffix: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.muted,
+  },
+  medalRow: {
+    flexDirection: 'row',
+  },
+  medalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.gold,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+  },
+  medalDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#7A4A00',
+    marginRight: space.xs,
+  },
+  medalText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: '#4A2A00',
+  },
+  feedbackGroup: {
+    marginBottom: space.md,
+  },
+  feedbackCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xlarge,
+    padding: space.md,
+    marginBottom: space.xs,
+  },
+  feedbackCardFocus: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primarySoft,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.sm,
+  },
+  checkBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.successTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.xs,
+  },
+  checkMark: {
+    width: 10,
+    height: 6,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    borderColor: colors.success,
+    transform: [{ rotate: '-45deg' }],
+    marginTop: -2,
+  },
+  focusBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFEDD5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.xs,
+  },
+  focusBadgeText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: fontSize.card,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  bullet: {
+    fontSize: fontSize.body,
+    lineHeight: 21,
+    color: colors.body,
+    marginBottom: space.xs,
+  },
+  actionsGroup: {
+    alignItems: 'center',
+  },
+  primaryButton: {
+    width: '100%',
+    height: 54,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: colors.surface,
+    fontSize: fontSize.button,
+    fontWeight: '700',
+  },
+  secondaryButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.xs,
+  },
+  secondaryButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.body,
+    fontWeight: '600',
+  },
+  textButton: {
+    paddingVertical: space.sm,
+  },
+  textButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.body,
+    fontWeight: '600',
   },
   fireworksOverlay: {
     position: 'absolute',
@@ -498,230 +588,12 @@ const styles = StyleSheet.create({
     width: 280,
     height: 280,
     borderRadius: 140,
-    backgroundColor: 'rgba(247, 181, 0, 0.32)',
+    backgroundColor: 'rgba(255,197,61,0.32)',
   },
   fireworkParticle: {
     position: 'absolute',
     top: 152,
     fontSize: 30,
     fontWeight: '700',
-  },
-  scroll: {
-    paddingHorizontal: 24,
-    paddingTop: 18,
-    paddingBottom: 40,
-    gap: 14,
-  },
-  heroCard: {
-    backgroundColor: '#101B30',
-    borderRadius: 30,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.24,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  heroEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-    color: '#7DD3FC',
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  playerName: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  heroTitle: {
-    fontSize: 20,
-    lineHeight: 28,
-    textAlign: 'center',
-    color: '#F7FAFF',
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: 'center',
-    color: '#BFD0EB',
-    marginBottom: 20,
-  },
-  heroMetaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
-    marginBottom: 18,
-  },
-  metaChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  metaChipText: {
-    color: '#E6EEFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  scoreRing: {
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F7FAFF',
-    borderWidth: 8,
-    borderColor: 'rgba(91, 140, 255, 0.18)',
-    shadowColor: '#F7B500',
-    shadowOffset: { width: 0, height: 14 },
-    shadowRadius: 26,
-    elevation: 10,
-  },
-  scoreRingWrapper: {
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  scoreLabel: {
-    fontSize: 14,
-    color: '#556785',
-  },
-  score: {
-    fontSize: 74,
-    fontWeight: '800',
-    color: '#10203A',
-    lineHeight: 82,
-  },
-  scoreSuffix: {
-    fontSize: 18,
-    color: '#60708F',
-  },
-  framesInfo: {
-    fontSize: 12,
-    color: '#8EA2C6',
-  },
-  banner: {
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    backgroundColor: 'rgba(247, 181, 0, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(247, 181, 0, 0.38)',
-  },
-  bannerText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFE7A0',
-    textAlign: 'center',
-  },
-  feedbackGroup: {
-    gap: 14,
-  },
-  feedbackCard: {
-    backgroundColor: '#F7FAFF',
-    borderRadius: 24,
-    padding: 22,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    elevation: 6,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#13203A',
-    marginBottom: 10,
-  },
-  bullet: {
-    fontSize: 15,
-    color: '#40506B',
-    lineHeight: 24,
-    marginBottom: 8,
-  },
-  compactTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#13203A',
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  compactTitleSpacing: {
-    marginTop: 14,
-  },
-  compactBullet: {
-    fontSize: 14,
-    color: '#40506B',
-    lineHeight: 22,
-    marginBottom: 6,
-  },
-  detailsToggle: {
-    alignSelf: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  detailsToggleText: {
-    color: '#E8F0FF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  actionsGroup: {
-    gap: 14,
-  },
-  recordAgainButton: {
-    backgroundColor: '#5B8CFF',
-    paddingVertical: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    shadowColor: '#5B8CFF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22,
-    shadowRadius: 18,
-    elevation: 7,
-  },
-  recordAgainText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  uploadAgainButton: {
-    backgroundColor: '#11B89A',
-    paddingVertical: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-  },
-  uploadAgainText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  homeButton: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    paddingVertical: 14,
-    borderRadius: 999,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  homeText: {
-    color: '#E8F0FF',
-    fontSize: 17,
-    fontWeight: '600',
   },
 });

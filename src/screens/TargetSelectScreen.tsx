@@ -35,6 +35,7 @@ import {
   inferVideoMimeType,
   pickVideoFromLibrary,
 } from '../utils/video';
+import { colors, fontSize, radius, space } from '../theme';
 
 type TargetSelectNavProp = StackNavigationProp<RootStackParamList, 'TargetSelect'>;
 type TargetSelectRouteProp = RouteProp<RootStackParamList, 'TargetSelect'>;
@@ -349,7 +350,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
           if (!response.ok) {
             throw new Error(responseText);
           }
-          throw new Error('The server returned an unreadable preview result.');
+          throw new Error('The preview response is missing required data.');
         }
       }
 
@@ -421,7 +422,6 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     if (!sessionPreview) return;
     const pointToAnalyze = pointOverride ?? selectedPoint;
     if (!pointToAnalyze) {
-      Alert.alert('Choose a player first', 'Tap the player you want to analyze in the preview image.');
       return;
     }
 
@@ -499,8 +499,8 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#5B8CFF" />
-          <Text style={styles.loadingText}>Uploading your clip and creating the player selection preview...</Text>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Getting your clip ready...</Text>
         </View>
       </SafeAreaView>
     );
@@ -510,44 +510,55 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <Text style={styles.errorEmoji}>😢</Text>
-          <Text style={styles.errorText}>{errorMessage || 'Could not create the player selection preview.'}</Text>
+          <View style={styles.errorBadge} />
+          <Text style={styles.errorTitle}>Could not read this clip</Text>
+          <Text style={styles.errorText}>
+            {errorMessage || 'Please try again or pick a different video.'}
+          </Text>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => prepareSelectionSession(videoUri, videoMd5)}
           >
             <Text style={styles.primaryButtonText}>Try again</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>
-            <Text style={styles.secondaryButtonText}>Choose another video</Text>
+          <TouchableOpacity style={styles.textButton} onPress={handlePickAnotherVideo}>
+            <Text style={styles.textButtonText}>Use a different clip</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  const statusText =
+    screenState === 'submitting'
+      ? 'Analyzing the clip...'
+      : selectedPoint
+        ? 'Player marked. Analyzing...'
+        : 'Tap the player in the picture';
+  const statusActive = screenState === 'submitting' || Boolean(selectedPoint);
+
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.orbTop} />
-      <View style={styles.orbBottom} />
-      <Animated.View
-        style={[
-          styles.container,
-          { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] },
-        ]}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.stepLabel}>Step 2</Text>
-          <Text style={styles.title}>Tap the player to score</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View
+          style={[
+            styles.container,
+            { opacity: screenOpacity, transform: [{ translateY: screenTranslateY }] },
+          ]}
+        >
+          <View style={styles.playerRow}>
+            <View style={styles.playerAvatar}>
+              <Text style={styles.playerAvatarText}>{playerName.slice(0, 1)}</Text>
+            </View>
+            <Text style={styles.playerName}>{playerName}</Text>
+          </View>
+
+          <Text style={styles.title}>Pick the player</Text>
           <Text style={styles.subtitle}>
-            Tap the player you want to analyze.
+            Tap the player you want scored. Analysis starts right away.
           </Text>
 
           <Animated.View style={[styles.previewCard, { transform: [{ scale: previewScale }] }]}>
-            <View style={styles.previewHeader}>
-              <Text style={styles.previewTitle}>Player preview</Text>
-              <Text style={styles.previewCaption}>Tap to select</Text>
-            </View>
             <Pressable
               style={[
                 styles.previewArea,
@@ -567,7 +578,8 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
                 style={styles.previewImage}
                 resizeMode="cover"
               />
-              {selectedPoint && (
+
+              {selectedPoint ? (
                 <>
                   <Animated.View
                     style={[
@@ -588,52 +600,37 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
                         top: `${selectedPoint.y * 100}%`,
                       },
                     ]}
-                  />
+                  >
+                    <View style={styles.markerCore} />
+                  </View>
                 </>
-              )}
+              ) : null}
+
+              {screenState === 'submitting' ? (
+                <View style={styles.previewOverlay}>
+                  <ActivityIndicator size="large" color={colors.surface} />
+                  <Text style={styles.previewOverlayText}>Analyzing...</Text>
+                </View>
+              ) : null}
             </Pressable>
           </Animated.View>
 
-          <Text style={styles.tipText}>
-            {screenState === 'submitting'
-              ? 'Starting analysis...'
-              : selectedPoint
-                ? 'Starting analysis...'
-                : 'Starting analysis... Tap a player to change.'}
-          </Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, statusActive && styles.statusDotActive]} />
+            <Text style={styles.statusText}>{statusText}</Text>
+          </View>
 
           {errorMessage ? <Text style={styles.inlineError}>{errorMessage}</Text> : null}
-        </ScrollView>
-
-        <View style={styles.actionBar}>
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              styles.actionButton,
-              (!selectedPoint || screenState === 'submitting') && styles.disabledButton,
-            ]}
-            onPress={() => handleAnalyze()}
-            disabled={!selectedPoint || screenState === 'submitting'}
-          >
-            {screenState === 'submitting' ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Start analysis</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.secondaryButton, styles.actionButton]} onPress={handlePickAnotherVideo}>
-            <Text style={styles.secondaryButtonText}>Choose another video</Text>
-          </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.ghostButton, styles.actionButton]}
-            onPress={() => navigation.navigate('Record', { playerName })}
+            style={styles.secondaryButton}
+            onPress={handlePickAnotherVideo}
+            disabled={screenState === 'submitting'}
           >
-            <Text style={styles.ghostButtonText}>Record a new clip</Text>
+            <Text style={styles.secondaryButtonText}>Use a different clip</Text>
           </TouchableOpacity>
-        </View>
-      </Animated.View>
+        </Animated.View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -641,98 +638,95 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#081120',
-  },
-  orbTop: {
-    position: 'absolute',
-    top: -60,
-    right: -20,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(91, 140, 255, 0.16)',
-  },
-  orbBottom: {
-    position: 'absolute',
-    bottom: -70,
-    left: -30,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(17, 184, 154, 0.12)',
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
-  },
-  scrollContent: {
-    paddingBottom: 280,
+    backgroundColor: colors.canvas,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 16,
+    paddingHorizontal: space.xl,
+    gap: space.sm,
   },
-  stepLabel: {
-    alignSelf: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(91, 140, 255, 0.16)',
-    color: '#9FC0FF',
-    fontSize: 12,
+  loadingText: {
+    fontSize: fontSize.body,
+    color: colors.body,
+    textAlign: 'center',
+  },
+  errorBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 3,
+    borderColor: colors.primarySoft,
+    marginBottom: space.xs,
+  },
+  errorTitle: {
+    fontSize: fontSize.card,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    marginBottom: 10,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: fontSize.body,
+    color: colors.body,
+    textAlign: 'center',
+    lineHeight: 21,
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+  },
+  scrollContent: {
+    paddingBottom: space.xl,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.sm,
+  },
+  playerAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.xs,
+  },
+  playerAvatarText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  playerName: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: colors.primary,
   },
   title: {
-    fontSize: 30,
+    fontSize: fontSize.title,
     fontWeight: '700',
-    color: '#F7FAFF',
-    textAlign: 'center',
-    marginBottom: 10,
+    color: colors.ink,
+    marginBottom: space.xs,
   },
   subtitle: {
-    fontSize: 15,
-    color: '#B6C5DE',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
+    fontSize: fontSize.body,
+    color: colors.body,
+    lineHeight: 21,
+    marginBottom: space.md,
   },
   previewCard: {
-    backgroundColor: '#F7FAFF',
-    borderRadius: 28,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    elevation: 6,
-  },
-  previewHeader: {
-    paddingHorizontal: 6,
-    paddingTop: 4,
-    paddingBottom: 12,
-  },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#13203A',
-  },
-  previewCaption: {
-    fontSize: 13,
-    color: '#60708F',
-    marginTop: 4,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xlarge,
+    padding: space.sm,
   },
   previewArea: {
     width: '100%',
     overflow: 'hidden',
-    borderRadius: 20,
-    backgroundColor: '#DDE7F7',
+    borderRadius: radius.large,
+    backgroundColor: colors.hairline,
   },
   previewImage: {
     width: '100%',
@@ -740,120 +734,109 @@ const styles = StyleSheet.create({
   },
   marker: {
     position: 'absolute',
-    width: 34,
-    height: 34,
-    marginLeft: -17,
-    marginTop: -17,
-    borderRadius: 17,
-    borderWidth: 3,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(255, 94, 125, 0.92)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.24,
-    shadowRadius: 10,
-    elevation: 5,
+    width: 38,
+    height: 38,
+    marginLeft: -19,
+    marginTop: -19,
+    borderRadius: 19,
+    borderWidth: 2.5,
+    borderColor: colors.surface,
+    backgroundColor: 'rgba(255,107,44,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerCore: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: colors.surface,
   },
   markerPulse: {
     position: 'absolute',
-    width: 34,
-    height: 34,
-    marginLeft: -17,
-    marginTop: -17,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    marginLeft: -19,
+    marginTop: -19,
+    borderRadius: 19,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.85)',
-    backgroundColor: 'rgba(255, 94, 125, 0.22)',
+    backgroundColor: 'rgba(255,107,44,0.22)',
   },
-  tipText: {
-    fontSize: 15,
-    color: '#D8E4FA',
-    textAlign: 'center',
-    marginTop: 14,
-    marginBottom: 10,
-    lineHeight: 22,
+  previewOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(43,33,25,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+  },
+  previewOverlayText: {
+    color: colors.surface,
+    fontSize: fontSize.body,
+    fontWeight: '600',
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.md,
+    marginBottom: space.sm,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.hairline,
+    marginRight: space.xs,
+  },
+  statusDotActive: {
+    backgroundColor: colors.success,
+  },
+  statusText: {
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.body,
   },
   inlineError: {
-    color: '#FFB4B4',
+    color: colors.danger,
     textAlign: 'center',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  actionBar: {
-    position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 14,
-    padding: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(8, 17, 32, 0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    gap: 12,
-  },
-  actionButton: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 420,
-    marginTop: 0,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#D8E4FA',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  errorEmoji: {
-    fontSize: 40,
-  },
-  errorText: {
-    fontSize: 16,
-    color: '#FFB4B4',
-    textAlign: 'center',
-    lineHeight: 24,
+    fontSize: fontSize.caption,
+    lineHeight: 19,
+    marginBottom: space.sm,
   },
   primaryButton: {
-    backgroundColor: '#5B8CFF',
-    borderRadius: 999,
-    paddingVertical: 16,
+    width: '100%',
+    maxWidth: 300,
+    height: 50,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
     alignItems: 'center',
-    shadowColor: '#5B8CFF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    elevation: 7,
-  },
-  disabledButton: {
-    opacity: 0.55,
+    justifyContent: 'center',
   },
   primaryButtonText: {
-    color: '#fff',
-    fontSize: 17,
+    color: colors.surface,
+    fontSize: fontSize.button,
     fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: '#11B89A',
-    borderRadius: 999,
-    paddingVertical: 15,
+    height: 48,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryHairline,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   secondaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.primary,
+    fontSize: fontSize.body,
+    fontWeight: '600',
   },
-  ghostButton: {
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  textButton: {
+    paddingVertical: space.xs,
   },
-  ghostButtonText: {
-    color: '#E8F0FF',
-    fontSize: 16,
+  textButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.body,
     fontWeight: '600',
   },
 });

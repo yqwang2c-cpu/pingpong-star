@@ -20,15 +20,21 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { SERVER_URL } from '../config/api';
 import { getVideoDurationLimitMessage, pickVideoFromLibrary } from '../utils/video';
+import {
+  colors,
+  fontSize,
+  MAX_SCORE,
+  radius,
+  rankColor,
+  rankTextColor,
+  space,
+} from '../theme';
 
 type HomeNavProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 interface Props {
   navigation: HomeNavProp;
 }
-
-const MAX_BAR_HEIGHT = 160;
-const MAX_SCORE = 100;
 
 interface PlayerScore {
   id?: string;
@@ -38,19 +44,34 @@ interface PlayerScore {
   rank?: number;
 }
 
+const NAME_CHARACTERS = /[^A-Za-z '\-]/g;
+
+function toCapitals(raw: string): string {
+  return raw.replace(NAME_CHARACTERS, '').toUpperCase();
+}
+
 export default function HomeScreen({ navigation }: Props) {
   const [leaderboard, setLeaderboard] = useState<PlayerScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [nameModalVisible, setNameModalVisible] = useState(false);
-  const [inputName, setInputName] = useState('');
+  const [familyName, setFamilyName] = useState('');
+  const [givenName, setGivenName] = useState('');
+  const [activeField, setActiveField] = useState<'family' | 'given' | null>(null);
   const [pendingAction, setPendingAction] = useState<'record' | 'upload' | null>(null);
+
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const heroTranslateY = useRef(new Animated.Value(18)).current;
-  const leaderboardOpacity = useRef(new Animated.Value(0)).current;
-  const leaderboardTranslateY = useRef(new Animated.Value(26)).current;
   const actionsOpacity = useRef(new Animated.Value(0)).current;
-  const actionsTranslateY = useRef(new Animated.Value(32)).current;
-  const barAnimations = useRef<Animated.Value[]>([]);
+  const actionsTranslateY = useRef(new Animated.Value(26)).current;
+  const boardOpacity = useRef(new Animated.Value(0)).current;
+  const boardTranslateY = useRef(new Animated.Value(26)).current;
+  const rowAnimations = useRef<Animated.Value[]>([]);
+
+  const trimmedFamily = familyName.trim();
+  const trimmedGiven = givenName.trim();
+  const fullName = [trimmedFamily, trimmedGiven].filter(Boolean).join(' ');
+  const initials = [trimmedFamily[0], trimmedGiven[0]].filter(Boolean).join('');
+  const canContinue = trimmedFamily.length > 0 && trimmedGiven.length > 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -63,27 +84,13 @@ export default function HomeScreen({ navigation }: Props) {
       Animated.parallel([
         Animated.timing(heroOpacity, {
           toValue: 1,
-          duration: 500,
+          duration: 460,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(heroTranslateY, {
           toValue: 0,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.parallel([
-        Animated.timing(leaderboardOpacity, {
-          toValue: 1,
-          duration: 440,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(leaderboardTranslateY, {
-          toValue: 0,
-          duration: 440,
+          duration: 460,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -91,40 +98,61 @@ export default function HomeScreen({ navigation }: Props) {
       Animated.parallel([
         Animated.timing(actionsOpacity, {
           toValue: 1,
-          duration: 420,
+          duration: 400,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
         Animated.timing(actionsTranslateY, {
           toValue: 0,
-          duration: 420,
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(boardOpacity, {
+          toValue: 1,
+          duration: 400,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(boardTranslateY, {
+          toValue: 0,
+          duration: 400,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
       ]),
     ]).start();
-  }, [actionsOpacity, actionsTranslateY, heroOpacity, heroTranslateY, leaderboardOpacity, leaderboardTranslateY]);
+  }, [
+    actionsOpacity,
+    actionsTranslateY,
+    boardOpacity,
+    boardTranslateY,
+    heroOpacity,
+    heroTranslateY,
+  ]);
 
   useEffect(() => {
     const required = leaderboard.length;
-    while (barAnimations.current.length < required) {
-      barAnimations.current.push(new Animated.Value(0));
+    while (rowAnimations.current.length < required) {
+      rowAnimations.current.push(new Animated.Value(0));
     }
 
-    barAnimations.current.forEach((value, index) => {
+    rowAnimations.current.forEach((value, index) => {
       if (index < required) value.setValue(0);
     });
 
     if (required === 0) return;
 
     Animated.stagger(
-      90,
+      80,
       leaderboard.map((_, index) =>
-        Animated.timing(barAnimations.current[index], {
+        Animated.timing(rowAnimations.current[index], {
           toValue: 1,
-          duration: 520,
+          duration: 420,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
+          useNativeDriver: true,
         })
       )
     ).start();
@@ -136,8 +164,8 @@ export default function HomeScreen({ navigation }: Props) {
       const res = await fetch(`${SERVER_URL}/api/scores`);
       const data = await res.json();
       const scores = (data.scores ?? []) as PlayerScore[];
-      while (barAnimations.current.length < scores.length) {
-        barAnimations.current.push(new Animated.Value(0));
+      while (rowAnimations.current.length < scores.length) {
+        rowAnimations.current.push(new Animated.Value(0));
       }
       setLeaderboard(scores);
     } catch {
@@ -148,17 +176,25 @@ export default function HomeScreen({ navigation }: Props) {
   }
 
   function askName(action: 'record' | 'upload') {
-    setInputName('');
+    setFamilyName('');
+    setGivenName('');
+    setActiveField(null);
     setPendingAction(action);
     setNameModalVisible(true);
   }
 
+  function closeNameModal() {
+    setNameModalVisible(false);
+    setPendingAction(null);
+  }
+
   async function onNameConfirmed() {
-    const name = inputName.trim();
-    if (!name) {
-      Alert.alert('Enter a player name');
+    if (!canContinue) {
+      Alert.alert('Both fields are needed', 'Please fill in the family name and the given name.');
       return;
     }
+
+    const name = fullName;
     setNameModalVisible(false);
 
     if (pendingAction === 'record') {
@@ -187,157 +223,186 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.orbTop} />
-      <View style={styles.orbRight} />
-      <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <Animated.View
           style={[
             styles.heroCard,
             { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
           ]}
         >
-          <Text style={styles.eyebrow}>Smart training for young players</Text>
-          <Text style={styles.title}>PingPong Star</Text>
-          <Text style={styles.subtitle}>
-            Record or upload a short clip, then tap the player to analyze.
+          <Text style={styles.heroEyebrow}>PINGPONG STAR</Text>
+          <Text style={styles.heroTitle}>Ready to play?</Text>
+          <Text style={styles.heroSubtitle}>
+            Record a 10-second rally and see how the shot scores.
           </Text>
-          <View style={styles.heroStats}>
-            <View style={styles.statPill}>
-              <Text style={styles.statLabel}>10s max</Text>
-            </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statLabel}>Top 5 ranks</Text>
-            </View>
-            <View style={styles.statPill}>
-              <Text style={styles.statLabel}>English feedback</Text>
-            </View>
-          </View>
         </Animated.View>
 
         <Animated.View
           style={[
-            styles.leaderboardCard,
-            { opacity: leaderboardOpacity, transform: [{ translateY: leaderboardTranslateY }] },
-          ]}
-        >
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardEyebrow}>All-time ranking</Text>
-            <Text style={styles.leaderboardTitle}>Top ranks</Text>
-          </View>
-
-          <View style={styles.chartRow}>
-            {loading ? (
-              <ActivityIndicator size="small" color="#5B8CFF" />
-            ) : leaderboard.length === 0 ? (
-              <Text style={styles.emptyText}>No scores yet.</Text>
-            ) : (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chartContent}
-              >
-                {leaderboard.map((player, index) => {
-                  const rank = player.rank ?? index + 1;
-                  const barHeight = (player.score / MAX_SCORE) * MAX_BAR_HEIGHT;
-                  const barColor =
-                    rank === 1 ? '#F7B500' : rank === 2 ? '#7DD3FC' : rank === 3 ? '#A78BFA' : '#5B8CFF';
-
-                  return (
-                    <View key={`${player.id ?? ''}-${player.name}-${player.score}-${player.createdAt ?? index}`} style={styles.barColumn}>
-                      {rank === 1 ? <Text style={styles.topBadge}>★</Text> : <View style={styles.badgeSpacer} />}
-                      <Text style={styles.barScore}>{player.score}</Text>
-                      <Animated.View
-                        style={[
-                          styles.bar,
-                          {
-                            backgroundColor: barColor,
-                            height: barAnimations.current[index].interpolate({
-                              inputRange: [0, 1],
-                              outputRange: [0, barHeight],
-                            }),
-                            opacity: barAnimations.current[index].interpolate({
-                              inputRange: [0, 0.2, 1],
-                              outputRange: [0.4, 0.7, 1],
-                            }),
-                          },
-                        ]}
-                      />
-                      <Text style={styles.barRank}>#{rank}</Text>
-                      <Text style={styles.barName}>{player.name}</Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.buttonRow,
+            styles.actionGroup,
             { opacity: actionsOpacity, transform: [{ translateY: actionsTranslateY }] },
           ]}
         >
-          <View style={styles.actionItem}>
-            <TouchableOpacity
-              style={styles.actionCard}
-              onPress={() => askName('record')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonIcon}>🎥</Text>
-              <Text style={styles.actionTitle}>Record</Text>
-              <Text style={styles.actionSubtitle}>10-second limit.</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => askName('record')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.primaryBadge}>
+              <View style={styles.primaryBadgeDot} />
+            </View>
+            <Text style={styles.primaryButtonText}>Record a clip</Text>
+          </TouchableOpacity>
 
-          <View style={styles.actionItem}>
-            <TouchableOpacity
-              style={[styles.actionCard, styles.uploadCard]}
-              onPress={() => askName('upload')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.buttonIcon}>📂</Text>
-              <Text style={styles.actionTitle}>Upload</Text>
-              <Text style={styles.actionSubtitle}>Pick a clip and tap the player.</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => askName('upload')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.secondaryButtonText}>Upload from gallery</Text>
+          </TouchableOpacity>
         </Animated.View>
 
-        <Text style={styles.footerHint}>Fireworks show only when you enter the leaderboard.</Text>
-      </View>
+        <Animated.View
+          style={[
+            styles.boardCard,
+            { opacity: boardOpacity, transform: [{ translateY: boardTranslateY }] },
+          ]}
+        >
+          <View style={styles.boardHeader}>
+            <Text style={styles.boardTitle}>Top players</Text>
+            <Text style={styles.boardMeta}>top 5</Text>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.primary} style={styles.boardSpinner} />
+          ) : leaderboard.length === 0 ? (
+            <Text style={styles.emptyText}>No scores yet. Record the first clip.</Text>
+          ) : (
+            leaderboard.map((player, index) => {
+              const rank = player.rank ?? index + 1;
+              const progress = rowAnimations.current[index];
+
+              return (
+                <Animated.View
+                  key={`${player.id ?? ''}-${player.name}-${player.score}-${player.createdAt ?? index}`}
+                  style={[
+                    styles.rankRow,
+                    {
+                      opacity: progress,
+                      transform: [
+                        {
+                          translateY: progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [14, 0],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  <View
+                    style={[styles.rankBadge, { backgroundColor: rankColor(rank) }]}
+                  >
+                    <Text style={[styles.rankBadgeText, { color: rankTextColor(rank) }]}>
+                      {rank}
+                    </Text>
+                  </View>
+                  <Text style={styles.rankName} numberOfLines={1}>
+                    {player.name}
+                  </Text>
+                  <View style={styles.rankTrack}>
+                    <View
+                      style={[
+                        styles.rankFill,
+                        {
+                          width: `${Math.round((player.score / MAX_SCORE) * 100)}%`,
+                          backgroundColor: rank === 1 ? colors.primary : colors.primarySoft,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.rankScore}>{player.score}</Text>
+                </Animated.View>
+              );
+            })
+          )}
+        </Animated.View>
+      </ScrollView>
 
       <Modal
         visible={nameModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setNameModalVisible(false)}
+        onRequestClose={closeNameModal}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Player name</Text>
-            <Text style={styles.modalSubtitle}>Enter the name to show on this result and the leaderboard.</Text>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Who is playing?</Text>
+            <Text style={styles.modalSubtitle}>Names are saved in capitals</Text>
+
+            <Text style={styles.fieldLabel}>FAMILY NAME</Text>
             <TextInput
-              style={styles.nameInput}
-              value={inputName}
-              onChangeText={setInputName}
-              placeholder="For example: Mia"
-              placeholderTextColor="#8FA1CC"
+              style={[styles.fieldInput, activeField === 'family' && styles.fieldInputActive]}
+              value={familyName}
+              onChangeText={(text) => setFamilyName(toCapitals(text))}
+              onFocus={() => setActiveField('family')}
+              onBlur={() => setActiveField(null)}
+              placeholder="WANG"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              spellCheck={false}
               autoFocus
+              maxLength={24}
+              returnKeyType="next"
+            />
+
+            <Text style={styles.fieldLabel}>GIVEN NAME</Text>
+            <TextInput
+              style={[styles.fieldInput, activeField === 'given' && styles.fieldInputActive]}
+              value={givenName}
+              onChangeText={(text) => setGivenName(toCapitals(text))}
+              onFocus={() => setActiveField('given')}
+              onBlur={() => setActiveField(null)}
+              placeholder="YANYI"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              spellCheck={false}
+              maxLength={24}
               returnKeyType="done"
               onSubmitEditing={onNameConfirmed}
             />
+
+            {canContinue ? (
+              <View style={styles.previewRow}>
+                <View style={styles.previewAvatar}>
+                  <Text style={styles.previewAvatarText}>{initials}</Text>
+                </View>
+                <View>
+                  <Text style={styles.previewLabel}>Will show as</Text>
+                  <Text style={styles.previewName}>{fullName}</Text>
+                </View>
+              </View>
+            ) : null}
+
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setNameModalVisible(false)}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
+              <TouchableOpacity style={styles.modalCancel} onPress={closeNameModal}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmBtn} onPress={onNameConfirmed}>
-                <Text style={styles.confirmText}>Continue</Text>
+              <TouchableOpacity
+                style={[styles.modalStart, !canContinue && styles.modalStartDisabled]}
+                onPress={onNameConfirmed}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.modalStartText}>Start</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -350,276 +415,271 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#081120',
+    backgroundColor: colors.canvas,
   },
-  orbTop: {
-    position: 'absolute',
-    top: -60,
-    left: -20,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(91, 140, 255, 0.18)',
-  },
-  orbRight: {
-    position: 'absolute',
-    top: 120,
-    right: -40,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(37, 211, 171, 0.12)',
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+  scroll: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    paddingBottom: space.xl,
   },
   heroCard: {
-    backgroundColor: '#101B30',
-    borderRadius: 28,
-    padding: 22,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radius.xlarge,
+    padding: space.lg,
+    marginBottom: space.md,
   },
-  eyebrow: {
-    fontSize: 12,
+  heroEyebrow: {
+    fontSize: fontSize.label,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    color: '#7DD3FC',
-    marginBottom: 8,
+    letterSpacing: 1.2,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: space.xs,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#F7FAFF',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#C1CEE8',
-    marginBottom: 18,
-  },
-  heroStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  statPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  statLabel: {
-    color: '#E9F1FF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  leaderboardCard: {
-    backgroundColor: '#F7FAFF',
-    borderRadius: 28,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 6,
-    marginBottom: 18,
-  },
-  cardHeader: {
-    marginBottom: 16,
-  },
-  cardEyebrow: {
-    fontSize: 12,
+  heroTitle: {
+    fontSize: fontSize.title,
     fontWeight: '700',
-    color: '#5B8CFF',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 4,
+    color: colors.surface,
+    marginBottom: space.xs,
   },
-  leaderboardTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#13203A',
+  heroSubtitle: {
+    fontSize: fontSize.body,
+    lineHeight: 21,
+    color: 'rgba(255,255,255,0.88)',
   },
-  chartRow: {
+  actionGroup: {
+    marginBottom: space.md,
+  },
+  primaryButton: {
+    height: 58,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    height: MAX_BAR_HEIGHT + 64,
-    paddingTop: 10,
-  },
-  chartContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
-    paddingHorizontal: 6,
-  },
-  barColumn: {
     alignItems: 'center',
-    width: 52,
+    paddingHorizontal: space.lg,
   },
-  topBadge: {
-    fontSize: 14,
-    color: '#F7B500',
-    marginBottom: 4,
+  primaryBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.sm,
   },
-  badgeSpacer: {
-    height: 18,
-    marginBottom: 4,
+  primaryBadgeDot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: colors.surface,
   },
-  bar: {
-    width: 32,
-    borderRadius: 10,
-  },
-  barScore: {
-    fontSize: 12,
-    color: '#20304C',
-    marginBottom: 6,
-    fontWeight: '600',
-  },
-  barRank: {
-    fontSize: 13,
-    color: '#60708F',
-    marginTop: 8,
-  },
-  barName: {
-    fontSize: 11,
-    color: '#41516E',
-    marginTop: 4,
-    maxWidth: 52,
-    textAlign: 'center',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  actionItem: {
-    flex: 1,
-  },
-  actionCard: {
-    minHeight: 168,
-    borderRadius: 26,
-    paddingHorizontal: 18,
-    paddingVertical: 20,
-    backgroundColor: '#5B8CFF',
-    shadowColor: '#5B8CFF',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    elevation: 6,
-  },
-  uploadCard: {
-    backgroundColor: '#11B89A',
-    shadowColor: '#11B89A',
-  },
-  buttonIcon: {
-    fontSize: 34,
-    marginBottom: 18,
-  },
-  actionTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
+  primaryButtonText: {
+    fontSize: fontSize.button,
     fontWeight: '700',
-    marginBottom: 8,
+    color: colors.surface,
   },
-  actionSubtitle: {
-    color: 'rgba(255,255,255,0.86)',
-    fontSize: 13,
-    lineHeight: 20,
+  secondaryButton: {
+    height: 48,
+    borderRadius: radius.medium,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primaryHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.xs,
+  },
+  secondaryButtonText: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  boardCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xlarge,
+    padding: space.md,
+  },
+  boardHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: space.sm,
+  },
+  boardTitle: {
+    fontSize: fontSize.card,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  boardMeta: {
+    fontSize: fontSize.label,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: colors.primary,
+  },
+  boardSpinner: {
+    marginVertical: space.xl,
   },
   emptyText: {
-    fontSize: 14,
-    color: '#5A6C8C',
+    fontSize: fontSize.body,
+    color: colors.muted,
     textAlign: 'center',
-    paddingVertical: 40,
+    paddingVertical: space.xl,
   },
-  footerHint: {
-    marginTop: 16,
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#9DB0D1',
-    textAlign: 'center',
-    paddingHorizontal: 8,
+  rankRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.sm,
+  },
+  rankBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.sm,
+  },
+  rankBadgeText: {
+    fontSize: fontSize.micro,
+    fontWeight: '700',
+  },
+  rankName: {
+    width: 84,
+    fontSize: fontSize.caption,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  rankTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.hairline,
+    overflow: 'hidden',
+    marginRight: space.sm,
+  },
+  rankFill: {
+    height: 8,
+    borderRadius: 4,
+  },
+  rankScore: {
+    width: 28,
+    textAlign: 'right',
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.ink,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(3, 9, 20, 0.72)',
+    backgroundColor: 'rgba(43,33,25,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: space.lg,
   },
-  modalBox: {
-    width: '82%',
-    backgroundColor: '#F7FAFF',
-    borderRadius: 24,
-    padding: 24,
-    gap: 12,
+  modalCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.xlarge,
+    padding: space.lg,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: fontSize.card,
     fontWeight: '700',
-    color: '#10203A',
+    color: colors.ink,
     textAlign: 'center',
   },
   modalSubtitle: {
-    fontSize: 14,
-    color: '#687A97',
+    fontSize: fontSize.caption,
+    color: colors.muted,
     textAlign: 'center',
-    lineHeight: 20,
+    marginTop: 2,
+    marginBottom: space.lg,
   },
-  nameInput: {
-    width: '100%',
+  fieldLabel: {
+    fontSize: fontSize.label,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: colors.muted,
+    marginBottom: space.xs,
+  },
+  fieldInput: {
+    height: 46,
+    borderRadius: radius.small,
+    backgroundColor: colors.canvas,
     borderWidth: 1,
-    borderColor: '#D1DCF2',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    color: '#222',
-    textAlign: 'center',
-    marginTop: 4,
+    borderColor: colors.hairline,
+    paddingHorizontal: space.sm,
+    fontSize: fontSize.body,
+    letterSpacing: 1,
+    fontWeight: '600',
+    color: colors.ink,
+    marginBottom: space.sm,
+  },
+  fieldInputActive: {
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.canvas,
+    borderRadius: radius.small,
+    padding: space.sm,
+    marginTop: space.xs,
+  },
+  previewAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.sm,
+  },
+  previewAvatarText: {
+    fontSize: fontSize.micro,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  previewLabel: {
+    fontSize: fontSize.label,
+    color: colors.muted,
+  },
+  previewName: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    color: colors.ink,
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-    width: '100%',
+    gap: space.xs,
+    marginTop: space.md,
   },
-  cancelBtn: {
+  modalCancel: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 16,
+    height: 46,
+    borderRadius: radius.medium,
     borderWidth: 1,
-    borderColor: '#D1DCF2',
+    borderColor: colors.hairline,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
   },
-  cancelText: {
-    fontSize: 16,
-    color: '#5A6C8C',
+  modalCancelText: {
+    fontSize: fontSize.body,
     fontWeight: '600',
+    color: colors.body,
   },
-  confirmBtn: {
+  modalStart: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: '#5B8CFF',
+    height: 46,
+    borderRadius: radius.medium,
+    backgroundColor: colors.primary,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  confirmText: {
-    fontSize: 16,
+  modalStartDisabled: {
+    backgroundColor: colors.primarySoft,
+  },
+  modalStartText: {
+    fontSize: fontSize.body,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.surface,
   },
 });
