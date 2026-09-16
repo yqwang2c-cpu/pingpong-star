@@ -132,13 +132,45 @@ export function rankScores(allScores: ScoreEntry[]): RankedScoreEntry[] {
   });
 }
 
+export function bestScorePerPlayer(scores: ScoreEntry[]): ScoreEntry[] {
+  const bestByName = new Map<string, ScoreEntry>();
+
+  for (const entry of scores) {
+    const playerKey = normalizePlayerName(entry.name);
+    if (!playerKey) continue;
+
+    const existing = bestByName.get(playerKey);
+    if (!existing) {
+      bestByName.set(playerKey, entry);
+      continue;
+    }
+
+    const higherScore = entry.score > existing.score;
+    const sameScoreButOlder =
+      entry.score === existing.score && entry.createdAt < existing.createdAt;
+
+    if (higherScore || sameScoreButOlder) {
+      bestByName.set(playerKey, entry);
+    }
+  }
+
+  return [...bestByName.values()];
+}
+
 export function getLeaderboard(scores: ScoreEntry[] = readScores()): RankedScoreEntry[] {
-  return rankScores(scores).filter((entry) => entry.rank <= 5);
+  return rankScores(bestScorePerPlayer(scores)).filter((entry) => entry.rank <= 5);
 }
 
 function getLeaderboardPlacement(entryId: string, scores: ScoreEntry[]) {
-  const rankedAll = rankScores(scores);
-  const rankedEntry = rankedAll.find((item) => item.id === entryId) ?? null;
+  // Rank by each player's best score so one child cannot occupy the whole board
+  // with duplicate entries recorded under name variants.
+  const rankedAll = rankScores(bestScorePerPlayer(scores));
+  const targetEntry = scores.find((item) => item.id === entryId) ?? null;
+  const targetKey = targetEntry ? normalizePlayerName(targetEntry.name) : null;
+  const rankedEntry =
+    targetKey !== null
+      ? rankedAll.find((item) => normalizePlayerName(item.name) === targetKey) ?? null
+      : null;
   const qualified = rankedEntry ? rankedEntry.rank <= 5 : false;
 
   return {
