@@ -79,11 +79,15 @@ export function makeAnalysisKey(videoHash: string, point: PointSelection): strin
   return `${videoHash}:${makePointKey(point)}`;
 }
 
+export function getScoresFilePath(): string {
+  return SCORES_FILE;
+}
+
 export function readScores(): ScoreEntry[] {
   return readJsonFile<ScoreEntry[]>(SCORES_FILE, []);
 }
 
-function writeScores(scores: ScoreEntry[]) {
+export function writeScores(scores: ScoreEntry[]) {
   writeJsonFile(SCORES_FILE, scores);
 }
 

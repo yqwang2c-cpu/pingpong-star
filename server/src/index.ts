@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import analyzeRouter from './routes/analyze';
 import scoresRouter from './routes/scores';
+import { runNameNormalizationMigration } from './utils/nameMigration';
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3001);
@@ -15,6 +16,8 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/analyze', analyzeRouter);
 app.use('/api/scores', scoresRouter);
+
+runNameNormalizationMigration();
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running: http://localhost:${PORT}`);
