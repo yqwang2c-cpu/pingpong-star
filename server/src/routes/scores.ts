@@ -1,61 +1,7 @@
 import { Router } from 'express';
-import path from 'path';
-import fs from 'fs';
-import { randomUUID } from 'crypto';
+import { getLeaderboard, readScores, saveScoreOnce } from '../utils/persistence';
 
 const router = Router();
-const FALLBACK_SCORES_FILE = path.join(__dirname, '../../scores.json');
-const SCORES_FILE =
-  process.env.SCORES_FILE ??
-  (fs.existsSync('/var/data') ? '/var/data/scores.json' : FALLBACK_SCORES_FILE);
-
-interface ScoreEntry {
-  id?: string;
-  name: string;
-  score: number;
-  createdAt: number;
-}
-
-type RankedScoreEntry = ScoreEntry & { rank: number };
-
-function ensureScoresDirectoryExists() {
-  try {
-    fs.mkdirSync(path.dirname(SCORES_FILE), { recursive: true });
-  } catch {
-    return;
-  }
-}
-
-function readScores(): ScoreEntry[] {
-  if (!fs.existsSync(SCORES_FILE)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(SCORES_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
-}
-
-function rankScores(allScores: ScoreEntry[]): RankedScoreEntry[] {
-  const sorted = [...allScores].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return a.createdAt - b.createdAt;
-  });
-
-  let previousScore: number | null = null;
-  let previousRank = 0;
-
-  return sorted.map((entry, index) => {
-    const rank = previousScore === entry.score ? previousRank : index + 1;
-    previousScore = entry.score;
-    previousRank = rank;
-
-    return { ...entry, rank };
-  });
-}
-
-function getLeaderboard(scores: ScoreEntry[]): RankedScoreEntry[] {
-  return rankScores(scores).filter((entry) => entry.rank <= 5);
-}
 
 router.get('/', (_req, res) => {
   const all = readScores();
@@ -65,37 +11,32 @@ router.get('/', (_req, res) => {
 });
 
 router.post('/', (req, res): void => {
-  const { name, score } = req.body as { name?: string; score?: unknown };
+  const { name, score, analysisKey } = req.body as {
+    name?: string;
+    score?: unknown;
+    analysisKey?: unknown;
+  };
   if (!name || typeof score !== 'number') {
     res.status(400).json({ error: 'Both name (string) and score (number) are required.' });
     return;
   }
 
-  const scores = readScores();
-  const entry: ScoreEntry = {
-    id: randomUUID(),
+  if (analysisKey !== undefined && typeof analysisKey !== 'string') {
+    res.status(400).json({ error: 'analysisKey must be a string when provided.' });
+    return;
+  }
+
+  const result = saveScoreOnce({
     name,
     score,
-    createdAt: Date.now(),
-  };
-
-  scores.push(entry);
-  ensureScoresDirectoryExists();
-  fs.writeFileSync(SCORES_FILE, JSON.stringify(scores, null, 2), 'utf-8');
-
-  const rankedAll = rankScores(scores);
-  const leaderboard = rankedAll.filter((item) => item.rank <= 5);
-  const rankedEntry = rankedAll.find((item) => item.id === entry.id) ?? null;
-  const qualified = rankedEntry ? rankedEntry.rank <= 5 : false;
+    analysisKey,
+  });
 
   res.json({
     status: 'ok',
-    entry,
-    leaderboard: {
-      qualified,
-      rank: qualified && rankedEntry ? rankedEntry.rank : null,
-      scores: leaderboard,
-    },
+    reused: result.reused,
+    entry: result.entry,
+    leaderboard: result.leaderboard,
   });
 });
 

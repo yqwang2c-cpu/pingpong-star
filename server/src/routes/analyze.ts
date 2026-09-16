@@ -12,6 +12,12 @@ import {
   getMediaDimensions,
   getMediaInfo,
 } from '../utils/ffmpeg';
+import {
+  getCachedAnalysis,
+  makeAnalysisKey,
+  setCachedAnalysis,
+  type PointSelection,
+} from '../utils/persistence';
 
 const router = Router();
 
@@ -49,6 +55,7 @@ interface AnalyzeSession {
   id: string;
   createdAt: number;
   videoPath: string;
+  videoHash: string | null;
   framePaths: string[];
   previewPath: string;
 }
@@ -77,11 +84,16 @@ function cleanupExpiredSessions() {
   }
 }
 
-function createSession(videoPath: string, framePaths: string[]): AnalyzeSession {
+function createSession(
+  videoPath: string,
+  framePaths: string[],
+  videoHash: string | null
+): AnalyzeSession {
   const session: AnalyzeSession = {
     id: randomUUID(),
     createdAt: Date.now(),
     videoPath,
+    videoHash,
     framePaths,
     previewPath: framePaths[0],
   };
@@ -365,6 +377,65 @@ async function validateVideoDuration(videoPath: string): Promise<void> {
   }
 }
 
+function parseSelection(rawBody: unknown): PointSelection {
+  const body = rawBody as { x?: unknown; y?: unknown };
+  return {
+    x: Number(body?.x),
+    y: Number(body?.y),
+  };
+}
+
+function isValidSelection(selection: PointSelection): boolean {
+  return (
+    Number.isFinite(selection.x) &&
+    Number.isFinite(selection.y) &&
+    selection.x >= 0 &&
+    selection.x <= 1 &&
+    selection.y >= 0 &&
+    selection.y <= 1
+  );
+}
+
+function parseVideoHash(rawValue: unknown): string | null {
+  if (typeof rawValue !== 'string') return null;
+  const normalized = rawValue.trim().toLowerCase();
+  if (!/^[a-f0-9]{32}$/.test(normalized)) return null;
+  return normalized;
+}
+
+router.post('/reuse', (req: Request, res: Response): void => {
+  try {
+    const videoHash = parseVideoHash(req.body?.videoHash);
+    if (!videoHash) {
+      res.status(400).json({ error: 'videoHash is required.' });
+      return;
+    }
+
+    const selection = parseSelection(req.body);
+    if (!isValidSelection(selection)) {
+      res.status(400).json({ error: 'A valid selection point is required.' });
+      return;
+    }
+
+    const analysisKey = makeAnalysisKey(videoHash, selection);
+    const cached = getCachedAnalysis(analysisKey);
+    if (!cached) {
+      res.json({ reused: false });
+      return;
+    }
+
+    res.json({
+      reused: true,
+      analysisKey,
+      result: cached.result,
+    });
+  } catch (err) {
+    console.error('Failed to look up reusable analysis:', err);
+    const { statusCode, message } = getUploadErrorResponse(err);
+    res.status(statusCode).json({ error: message });
+  }
+});
+
 router.post('/session', (req: Request, res: Response): void => {
   cleanupExpiredSessions();
 
@@ -382,6 +453,7 @@ router.post('/session', (req: Request, res: Response): void => {
     }
 
     const videoPath = req.file.path;
+    const videoHash = parseVideoHash(req.body?.videoHash);
     let extractedFramePaths: string[] = [];
 
     try {
@@ -394,7 +466,7 @@ router.post('/session', (req: Request, res: Response): void => {
         throw new Error('Could not extract valid frames from the video');
       }
 
-      const session = createSession(videoPath, extractedFramePaths);
+      const session = createSession(videoPath, extractedFramePaths, videoHash);
       const previewSize = await getMediaDimensions(session.previewPath);
 
       res.json({
@@ -417,23 +489,26 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
 
   try {
     const { sessionId } = req.params;
-    const selection = {
-      x: Number(req.body?.x),
-      y: Number(req.body?.y),
-    };
+    const selection = parseSelection(req.body);
 
-    if (
-      !Number.isFinite(selection.x) ||
-      !Number.isFinite(selection.y) ||
-      selection.x < 0 ||
-      selection.x > 1 ||
-      selection.y < 0 ||
-      selection.y > 1
-    ) {
+    if (!isValidSelection(selection)) {
       throw new Error('Please tap the player you want to analyze first');
     }
 
     const session = getSession(sessionId);
+    const analysisKey = session.videoHash ? makeAnalysisKey(session.videoHash, selection) : null;
+    if (analysisKey) {
+      const cached = getCachedAnalysis(analysisKey);
+      if (cached) {
+        res.json({
+          reused: true,
+          analysisKey,
+          ...cached.result,
+        });
+        return;
+      }
+    }
+
     const previewDimensions = await getMediaDimensions(session.previewPath);
     const selectedFramePaths: string[] = [];
 
@@ -448,7 +523,14 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
       }
 
       const result = await analyzeFramePaths(selectedFramePaths);
-      res.json(result);
+      if (analysisKey) {
+        setCachedAnalysis(analysisKey, result);
+      }
+      res.json({
+        reused: false,
+        analysisKey,
+        ...result,
+      });
     } finally {
       selectedFramePaths.forEach(deleteFileIfExists);
     }

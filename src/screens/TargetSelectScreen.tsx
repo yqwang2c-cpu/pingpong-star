@@ -71,6 +71,18 @@ function parseAnalysisResult(data: Record<string, unknown> | null): AnalysisResu
   };
 }
 
+function getAnalysisKey(
+  data: Record<string, unknown> | null,
+  fallbackMd5: string | null,
+  point: SelectedPoint
+): string | null {
+  if (typeof data?.analysisKey === 'string' && data.analysisKey.length > 0) {
+    return data.analysisKey;
+  }
+
+  return fallbackMd5 ? makeCacheKey(fallbackMd5, point) : null;
+}
+
 export default function TargetSelectScreen({ navigation, route }: Props) {
   const { videoUri, playerName } = route.params;
   const [screenState, setScreenState] = useState<ScreenState>('preparing');
@@ -96,20 +108,36 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       setVideoMd5(md5);
 
       if (md5) {
+        const reused = await tryReuseAnalysis(md5, DEFAULT_POINT);
+        if (cancelled) return;
+        if (reused) {
+          await setCachedAnalysis(reused.analysisKey, reused.result);
+          const leaderboardPlacement = await saveScore(reused.result.score, reused.analysisKey);
+          if (cancelled) return;
+          navigation.replace('Result', {
+            playerName,
+            result: reused.result,
+            leaderboardPlacement,
+          });
+          return;
+        }
+
         const cacheKey = makeCacheKey(md5, DEFAULT_POINT);
         const cached = await getCachedAnalysis(cacheKey);
         if (cancelled) return;
         if (cached) {
+          const leaderboardPlacement = await saveScore(cached.score, cacheKey);
+          if (cancelled) return;
           navigation.replace('Result', {
             playerName,
             result: cached,
-            leaderboardPlacement: { qualified: false, rank: null, celebrate: false },
+            leaderboardPlacement,
           });
           return;
         }
       }
 
-      prepareSelectionSession(videoUri);
+      prepareSelectionSession(videoUri, md5);
     })();
     return () => {
       cancelled = true;
@@ -208,15 +236,23 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
     return { qualified: false, rank: null, celebrate: false };
   }
 
-  async function saveScore(score: number): Promise<LeaderboardPlacement> {
+  async function saveScore(
+    score: number,
+    analysisKey?: string | null
+  ): Promise<LeaderboardPlacement> {
     try {
       const response = await fetch(`${SERVER_URL}/api/scores`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: playerName, score }),
+        body: JSON.stringify({
+          name: playerName,
+          score,
+          ...(analysisKey ? { analysisKey } : {}),
+        }),
       });
 
       const data = (await response.json()) as {
+        reused?: unknown;
         leaderboard?: { qualified?: unknown; rank?: unknown };
       };
 
@@ -225,17 +261,52 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       }
 
       const qualified = data.leaderboard?.qualified === true;
+      const reused = data.reused === true;
       return {
         qualified,
         rank: typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null,
-        celebrate: qualified,
+        celebrate: qualified && !reused,
       };
     } catch {
       return getDefaultPlacement();
     }
   }
 
-  async function prepareSelectionSession(uri: string) {
+  async function tryReuseAnalysis(
+    videoHash: string,
+    point: SelectedPoint
+  ): Promise<{ analysisKey: string; result: AnalysisResult } | null> {
+    try {
+      const response = await fetch(`${SERVER_URL}/api/analyze/reuse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoHash,
+          x: point.x,
+          y: point.y,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        reused?: unknown;
+        analysisKey?: unknown;
+        result?: Record<string, unknown> | null;
+      };
+
+      if (!response.ok || data.reused !== true || typeof data.analysisKey !== 'string') {
+        return null;
+      }
+
+      return {
+        analysisKey: data.analysisKey,
+        result: parseAnalysisResult(data.result ?? null),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async function prepareSelectionSession(uri: string, resolvedVideoMd5?: string | null) {
     try {
       setScreenState('preparing');
       setSessionPreview(null);
@@ -258,6 +329,10 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         name: filename,
         type: inferVideoMimeType(filename),
       } as unknown as Blob);
+      const uploadVideoMd5 = resolvedVideoMd5 ?? videoMd5;
+      if (uploadVideoMd5) {
+        formData.append('videoHash', uploadVideoMd5);
+      }
 
       const response = await fetch(`${SERVER_URL}/api/analyze/session`, {
         method: 'POST',
@@ -384,10 +459,12 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
       }
 
       const analysisResult = parseAnalysisResult(data);
-      const leaderboardPlacement = await saveScore(analysisResult.score);
-      if (videoMd5) {
-        const cacheKey = makeCacheKey(videoMd5, pointToAnalyze);
-        await setCachedAnalysis(cacheKey, analysisResult);
+      const analysisKey = getAnalysisKey(data, videoMd5, pointToAnalyze);
+      const leaderboardPlacement = await saveScore(analysisResult.score, analysisKey);
+      if (analysisKey) {
+        await setCachedAnalysis(analysisKey, analysisResult);
+      } else if (videoMd5) {
+        await setCachedAnalysis(makeCacheKey(videoMd5, pointToAnalyze), analysisResult);
       }
       navigation.replace('Result', {
         playerName,
@@ -435,7 +512,10 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         <View style={styles.centered}>
           <Text style={styles.errorEmoji}>😢</Text>
           <Text style={styles.errorText}>{errorMessage || 'Could not create the player selection preview.'}</Text>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => prepareSelectionSession(videoUri)}>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => prepareSelectionSession(videoUri, videoMd5)}
+          >
             <Text style={styles.primaryButtonText}>Try again</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryButton} onPress={handlePickAnotherVideo}>

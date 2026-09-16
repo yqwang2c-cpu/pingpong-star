@@ -44,14 +44,23 @@ yarn-error.*
 # local tooling / caches
 .npm/
 .npm-cache/
+.cache/
 .home/
 .eas-home/
 .eas-tmp/
 .sandbox-home/
 .tmp-home/
 .tmp/
+.tmp-cache/
+.tmp-eas/
 .trae-home/
 .trae-tmp/
+.trae-npm/
+.trae-npm-cache/
+.xdg/
+.eas-inspect/
+expo_home/
+node-compile-cache/
 Library/
 tmp-eas-inspect/
 build.html
@@ -63,3 +72,14 @@ package/
 mock-eas.js
 run-eas.js
 .eas-cli-bin/
+
+# local debug / introspection artifacts
+apollo.json
+apollo_parsed.json
+introspect*.js
+query*.json
+query*.js
+query_expo.py
+patch_env_paths.js
+eas-cli-*.tgz
+env-paths-*.tgz
