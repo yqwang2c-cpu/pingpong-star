@@ -168,6 +168,12 @@ function FireworksOverlay({ active }: { active: boolean }) {
 export default function ResultScreen({ navigation, route }: Props) {
   const { playerName, result, leaderboardPlacement } = route.params;
   const didEnterLeaderboard = leaderboardPlacement.qualified && leaderboardPlacement.celebrate !== false;
+  const personal = leaderboardPlacement.personal ?? null;
+  const hasPreviousClips = personal !== null && personal.personalTotal > 1;
+  // Only claim a place on the board when the result screen and the home board
+  // quote the same number, so a lower clip never borrows the player's old rank.
+  const showPersonalBestBadge = !leaderboardPlacement.rank && hasPreviousClips && personal?.isPersonalBest === true;
+  const showProgressCard = !leaderboardPlacement.rank && hasPreviousClips && personal?.isPersonalBest === false;
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const heroTranslateY = useRef(new Animated.Value(20)).current;
   const scorePulse = useRef(new Animated.Value(1)).current;
@@ -310,7 +316,11 @@ export default function ResultScreen({ navigation, route }: Props) {
         >
           <Text style={styles.heroEyebrow}>ANALYSIS COMPLETE</Text>
           <Text style={styles.playerName}>
-            {didEnterLeaderboard ? `Nice work, ${playerName}` : `Great effort, ${playerName}`}
+            {leaderboardPlacement.rank
+              ? `Nice work, ${playerName}`
+              : showPersonalBestBadge
+                ? `Personal best, ${playerName}`
+                : `Great effort, ${playerName}`}
           </Text>
 
           <Animated.View style={[styles.scoreDiscWrapper, { transform: [{ scale: scorePulse }] }]}>
@@ -320,11 +330,45 @@ export default function ResultScreen({ navigation, route }: Props) {
             </View>
           </Animated.View>
 
-          {didEnterLeaderboard && leaderboardPlacement.rank ? (
+          {leaderboardPlacement.rank ? (
             <View style={styles.medalRow}>
               <View style={styles.medalPill}>
                 <View style={styles.medalDot} />
                 <Text style={styles.medalText}>#{leaderboardPlacement.rank} on the board</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {showPersonalBestBadge ? (
+            <View style={styles.medalRow}>
+              <View style={[styles.medalPill, styles.bestPill]}>
+                <View style={[styles.medalDot, styles.bestDot]} />
+                <Text style={[styles.medalText, styles.bestText]}>Personal best so far</Text>
+              </View>
+            </View>
+          ) : null}
+
+          {showProgressCard && personal ? (
+            <View style={styles.progressCard}>
+              <Text style={styles.progressTitle}>YOUR PROGRESS</Text>
+
+              <View style={styles.progressRow}>
+                <Text style={styles.progressLabel}>Best score</Text>
+                <Text style={styles.progressValue}>{personal.personalBestScore}</Text>
+              </View>
+
+              <View style={styles.progressRow}>
+                <Text style={styles.progressLabel}>This clip</Text>
+                <Text style={styles.progressValue}>
+                  #{personal.personalRank} of {personal.personalTotal}
+                </Text>
+              </View>
+
+              <View style={styles.progressRow}>
+                <Text style={styles.progressLabel}>To your best</Text>
+                <Text style={[styles.progressValue, styles.progressGap]}>
+                  {personal.pointsToBest} pts to go
+                </Text>
               </View>
             </View>
           ) : null}
@@ -470,6 +514,47 @@ const styles = StyleSheet.create({
     fontSize: fontSize.caption,
     fontWeight: '700',
     color: '#4A2A00',
+  },
+  bestPill: {
+    backgroundColor: colors.successTint,
+  },
+  bestDot: {
+    backgroundColor: colors.success,
+  },
+  bestText: {
+    color: colors.success,
+  },
+  progressCard: {
+    width: '100%',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: radius.large,
+    padding: space.md,
+    marginTop: space.sm,
+  },
+  progressTitle: {
+    fontSize: fontSize.label,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: space.sm,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
+  },
+  progressLabel: {
+    fontSize: fontSize.body,
+    color: 'rgba(255,255,255,0.82)',
+  },
+  progressValue: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  progressGap: {
+    color: colors.primaryTint,
   },
   feedbackGroup: {
     marginBottom: space.md,

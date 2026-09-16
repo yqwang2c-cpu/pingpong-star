@@ -165,24 +165,70 @@ export function getLeaderboard(scores: ScoreEntry[] = readScores()): RankedScore
   return rankScores(bestScorePerPlayer(scores)).filter((entry) => entry.rank <= 5);
 }
 
-function getLeaderboardPlacement(entryId: string, scores: ScoreEntry[]) {
-  // Rank by each player's best score so one child cannot occupy the whole board
-  // with duplicate entries recorded under name variants.
+export interface PersonalStanding {
+  isPersonalBest: boolean;
+  personalBestScore: number;
+  personalRank: number;
+  personalTotal: number;
+  pointsToBest: number;
+}
+
+interface LeaderboardPlacement {
+  rankedAll: RankedScoreEntry[];
+  leaderboard: RankedScoreEntry[];
+  qualified: boolean;
+  rank: number | null;
+  rankedEntry: RankedScoreEntry | null;
+  personal: PersonalStanding | null;
+}
+
+function getLeaderboardPlacement(entryId: string, scores: ScoreEntry[]): LeaderboardPlacement {
+  // The board keeps one row per player holding only their best clip, so the
+  // place quoted after a submission has to describe THIS clip. Reading it off
+  // the player's row would report their older high score's position instead.
   const rankedAll = rankScores(bestScorePerPlayer(scores));
+  const leaderboard = rankedAll.filter((item) => item.rank <= 5);
+
   const targetEntry = scores.find((item) => item.id === entryId) ?? null;
-  const targetKey = targetEntry ? normalizePlayerName(targetEntry.name) : null;
-  const rankedEntry =
-    targetKey !== null
-      ? rankedAll.find((item) => normalizePlayerName(item.name) === targetKey) ?? null
-      : null;
-  const qualified = rankedEntry ? rankedEntry.rank <= 5 : false;
+  if (!targetEntry) {
+    return {
+      rankedAll,
+      leaderboard,
+      qualified: false,
+      rank: null,
+      rankedEntry: null,
+      personal: null,
+    };
+  }
+
+  const playerKey = normalizePlayerName(targetEntry.name);
+  const playerEntries = scores.filter((item) => normalizePlayerName(item.name) === playerKey);
+  const personalBestScore = playerEntries.reduce(
+    (best, item) => (item.score > best ? item.score : best),
+    targetEntry.score
+  );
+  const aheadCount = playerEntries.filter((item) => item.score > targetEntry.score).length;
+
+  const rankedEntry = rankedAll.find((item) => normalizePlayerName(item.name) === playerKey) ?? null;
+  const isPersonalBest = targetEntry.score >= personalBestScore;
+  // Claiming a place on the board is only honest when this clip is the row the
+  // board already shows for that player, since the two screens would otherwise
+  // quote different numbers for the same submission.
+  const qualified = Boolean(rankedEntry) && isPersonalBest && rankedEntry!.rank <= 5;
 
   return {
     rankedAll,
-    leaderboard: rankedAll.filter((item) => item.rank <= 5),
+    leaderboard,
     qualified,
     rank: qualified && rankedEntry ? rankedEntry.rank : null,
     rankedEntry,
+    personal: {
+      isPersonalBest,
+      personalBestScore,
+      personalRank: aheadCount + 1,
+      personalTotal: playerEntries.length,
+      pointsToBest: Math.max(0, personalBestScore - targetEntry.score),
+    },
   };
 }
 
@@ -227,6 +273,7 @@ export function saveScoreOnce({
     leaderboard: {
       qualified: placement.qualified,
       rank: placement.rank,
+      personal: placement.personal,
       scores: placement.leaderboard,
     },
   };

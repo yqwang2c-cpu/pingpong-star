@@ -21,6 +21,7 @@ import type {
   AnalysisResult,
   AnalyzeSessionPreview,
   LeaderboardPlacement,
+  PersonalStanding,
 } from '../types/analysis';
 import { SERVER_URL } from '../config/api';
 import {
@@ -234,7 +235,29 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
   }, [pulseOpacity, pulseScale, selectedPoint]);
 
   function getDefaultPlacement(): LeaderboardPlacement {
-    return { qualified: false, rank: null, celebrate: false };
+    return { qualified: false, rank: null, celebrate: false, personal: null };
+  }
+
+  function readPersonalStanding(raw: unknown): PersonalStanding | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const source = raw as Record<string, unknown>;
+    const readNumber = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+    const personalBestScore = readNumber(source.personalBestScore);
+    const personalRank = readNumber(source.personalRank);
+    const personalTotal = readNumber(source.personalTotal);
+    if (personalBestScore === null || personalRank === null || personalTotal === null) {
+      return null;
+    }
+
+    return {
+      isPersonalBest: source.isPersonalBest === true,
+      personalBestScore,
+      personalRank,
+      personalTotal,
+      pointsToBest: readNumber(source.pointsToBest) ?? 0,
+    };
   }
 
   async function saveScore(
@@ -254,7 +277,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
       const data = (await response.json()) as {
         reused?: unknown;
-        leaderboard?: { qualified?: unknown; rank?: unknown };
+        leaderboard?: { qualified?: unknown; rank?: unknown; personal?: unknown };
       };
 
       if (!response.ok) {
@@ -267,6 +290,7 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
         qualified,
         rank: typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null,
         celebrate: qualified && !reused,
+        personal: readPersonalStanding(data.leaderboard?.personal),
       };
     } catch {
       return getDefaultPlacement();

@@ -14,8 +14,17 @@ export interface AnalyzeSessionPreview {
   };
 }
 
+export interface PersonalStanding {
+  isPersonalBest: boolean;
+  personalBestScore: number;
+  personalRank: number;
+  personalTotal: number;
+  pointsToBest: number;
+}
+
 export interface LeaderboardPlacement {
   qualified: boolean;
   rank: number | null;
   celebrate?: boolean;
+  personal?: PersonalStanding | null;
 }
