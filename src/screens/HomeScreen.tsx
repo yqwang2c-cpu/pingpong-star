@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  BackHandler,
   Modal,
   Image,
   Pressable,
@@ -83,6 +84,7 @@ export default function HomeScreen({ navigation }: Props) {
   const boardOpacity = useRef(new Animated.Value(0)).current;
   const boardTranslateY = useRef(new Animated.Value(26)).current;
   const rowAnimations = useRef<Animated.Value[]>([]);
+  const exitPromptRef = useRef(false);
 
   const trimmedFamily = familyName.trim();
   const trimmedGiven = givenName.trim();
@@ -94,6 +96,52 @@ export default function HomeScreen({ navigation }: Props) {
     useCallback(() => {
       fetchLeaderboard();
     }, [])
+  );
+
+  // The home screen is the bottom of the stack, so a back gesture here means
+  // the player is leaving the app. Ask first instead of closing straight away.
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') {
+        return;
+      }
+
+      const onBackPress = () => {
+        // Let an open modal close itself before the exit prompt shows up.
+        if (nameModalVisible || snapshotPlayer !== null) {
+          return false;
+        }
+
+        if (exitPromptRef.current) {
+          return true;
+        }
+
+        exitPromptRef.current = true;
+
+        Alert.alert('Leave PingPong Star?', 'Do you want to close the app?', [
+          {
+            text: 'Stay',
+            style: 'cancel',
+            onPress: () => {
+              exitPromptRef.current = false;
+            },
+          },
+          {
+            text: 'Exit',
+            style: 'destructive',
+            onPress: () => {
+              exitPromptRef.current = false;
+              BackHandler.exitApp();
+            },
+          },
+        ]);
+
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [nameModalVisible, snapshotPlayer])
   );
 
   useEffect(() => {

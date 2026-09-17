@@ -417,7 +417,7 @@ export default function ResultScreen({ navigation, route }: Props) {
         >
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('Record', { playerName })}
+            onPress={() => navigation.replace('Record', { playerName })}
           >
             <Text style={styles.primaryButtonText}>Record another clip</Text>
           </TouchableOpacity>
@@ -428,7 +428,10 @@ export default function ResultScreen({ navigation, route }: Props) {
 
           <TouchableOpacity
             style={styles.textButton}
-            onPress={() => navigation.navigate('Home')}
+            // React Navigation 7 pushes a second copy of a screen unless the
+            // navigation is told to pop, which used to leave the result screen
+            // sitting underneath the home screen in the back stack.
+            onPress={() => navigation.navigate('Home', undefined, { pop: true })}
           >
             <Text style={styles.textButtonText}>Back home</Text>
           </TouchableOpacity>
