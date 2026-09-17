@@ -101,6 +101,22 @@ export function getMediaInfo(filePath: string): Promise<MediaInfo> {
   });
 }
 
+export function writeHighlightImage(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    ffmpeg(inputPath)
+      .outputOptions(['-vf', 'scale=720:-1', '-q:v', '6', '-frames:v', '1'])
+      .output(outputPath)
+      .on('end', () => resolve())
+      .on('error', reject)
+      .run();
+  });
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

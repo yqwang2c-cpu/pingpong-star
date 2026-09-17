@@ -11,9 +11,11 @@ import {
   extractFrames,
   getMediaDimensions,
   getMediaInfo,
+  writeHighlightImage,
 } from '../utils/ffmpeg';
 import {
   getCachedAnalysis,
+  getHighlightPath,
   makeAnalysisKey,
   setCachedAnalysis,
   type PointSelection,
@@ -243,11 +245,14 @@ const COACHING_PROMPT = `You are a strict professional table tennis coach review
 - All returned text must be English only.
 - Never use Chinese characters in strengths or improvements.
 
+The images you are given are frames in chronological order: the first image is frame 1, the second is frame 2, and so on. Also return "highlightFrame", the number of the single frame that best shows the stroke. Prefer the moment of contact with the ball. If every frame is equally poor, return the frame where the player is clearest.
+
 Return valid JSON only. No markdown, no explanation, no extra text.
 {
   "score": <integer from 0 to 100, sum of the four dimensions>,
   "strengths": ["1-3 short English bullet points about what was done well. Use 'No clear strengths yet' if needed."],
-  "improvements": ["1-3 short English bullet points describing the most important technical fixes."]
+  "improvements": ["1-3 short English bullet points describing the most important technical fixes."],
+  "highlightFrame": <integer from 1 to the number of frames you were given>
 }`;
 
 function containsCjkText(value: unknown): boolean {
@@ -260,12 +265,15 @@ async function ensureEnglishFeedback(
     score: number;
     strengths: string[];
     improvements: string[];
+    highlightFrame: number;
   }
 ): Promise<{
   score: number;
   strengths: string[];
   improvements: string[];
+  highlightFrame: number;
 }> {
+  const highlightFrame = analysis.highlightFrame;
   const hasNonEnglishFeedback =
     analysis.strengths.some(containsCjkText) || analysis.improvements.some(containsCjkText);
 
@@ -279,7 +287,7 @@ async function ensureEnglishFeedback(
     'Keep the JSON schema exactly the same.',
     'Return valid JSON only.',
     'Never use Chinese characters.',
-    JSON.stringify(analysis),
+    JSON.stringify({ score: analysis.score, strengths: analysis.strengths, improvements: analysis.improvements }),
   ].join('\n');
 
   const response = await client.chat.completions.create({
@@ -310,13 +318,27 @@ async function ensureEnglishFeedback(
     improvements: Array.isArray(parsed.improvements)
       ? parsed.improvements
       : analysis.improvements,
+    highlightFrame,
   };
+}
+
+function pickHighlightFrame(raw: unknown, frameCount: number): number {
+  if (frameCount <= 0) return 1;
+
+  const fallback = Math.min(Math.max(1, Math.ceil(frameCount / 2)), frameCount);
+  const value = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+
+  const index = Math.round(value);
+  if (index < 1 || index > frameCount) return fallback;
+  return index;
 }
 
 async function analyzeWithQwen(framePaths: string[]): Promise<{
   score: number;
   strengths: string[];
   improvements: string[];
+  highlightFrame: number;
 }> {
   const client = getClient();
   type ImageUrlContent = { type: 'image_url'; image_url: { url: string } };
@@ -354,6 +376,7 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
     score: Math.max(0, Math.min(100, Math.round(Number(parsed.score)))),
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
     improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
+    highlightFrame: pickHighlightFrame(parsed.highlightFrame, framePaths.length),
   });
 }
 
@@ -368,6 +391,25 @@ async function analyzeFramePaths(framePaths: string[]) {
 
 function getFramePaths(frameNames: string[]): string[] {
   return frameNames.map((frameName) => path.join(FRAMES_DIR, path.basename(frameName)));
+}
+
+async function saveHighlight(
+  analysisKey: string,
+  framePaths: string[],
+  highlightFrame: number | undefined
+): Promise<void> {
+  if (framePaths.length === 0) return;
+
+  const fallback = Math.ceil(framePaths.length / 2);
+  const requested = Number.isFinite(highlightFrame) ? Math.round(highlightFrame as number) : fallback;
+  const index = Math.min(Math.max(requested, 1), framePaths.length) - 1;
+
+  try {
+    await writeHighlightImage(framePaths[index], getHighlightPath(analysisKey));
+  } catch (err) {
+    // A missing snapshot must never fail the analysis the player is waiting on.
+    console.error('Failed to store the highlight snapshot:', err);
+  }
 }
 
 async function validateVideoDuration(videoPath: string): Promise<void> {
@@ -525,6 +567,7 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
       const result = await analyzeFramePaths(selectedFramePaths);
       if (analysisKey) {
         setCachedAnalysis(analysisKey, result);
+        await saveHighlight(analysisKey, selectedFramePaths, result.highlightFrame);
       }
       res.json({
         reused: false,

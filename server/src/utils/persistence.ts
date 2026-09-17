@@ -12,6 +12,7 @@ export interface AnalysisResultPayload {
   score: number;
   strengths: string[];
   improvements: string[];
+  highlightFrame?: number;
 }
 
 export interface ScoreEntry {
@@ -42,6 +43,9 @@ const SCORES_FILE =
   (fs.existsSync('/var/data') ? '/var/data/scores.json' : FALLBACK_SCORES_FILE);
 const ANALYSIS_CACHE_FILE =
   process.env.ANALYSIS_CACHE_FILE ?? path.join(path.dirname(SCORES_FILE), 'analysis-cache.json');
+// Snapshots share the disk holding the scores file, so they outlive a rebuild.
+const HIGHLIGHTS_DIR =
+  process.env.HIGHLIGHTS_DIR ?? path.join(path.dirname(SCORES_FILE), 'highlights');
 
 function ensureDirectoryExists(filePath: string) {
   try {
@@ -89,6 +93,40 @@ export function readScores(): ScoreEntry[] {
 
 export function writeScores(scores: ScoreEntry[]) {
   writeJsonFile(SCORES_FILE, scores);
+}
+
+export function highlightFileName(analysisKey: string): string {
+  return `${analysisKey.replace(/[^a-zA-Z0-9]+/g, '_')}.jpg`;
+}
+
+export function getHighlightPath(analysisKey: string): string {
+  return path.join(HIGHLIGHTS_DIR, highlightFileName(analysisKey));
+}
+
+export function hasHighlight(analysisKey: string | undefined | null): boolean {
+  if (!analysisKey) return false;
+  return fs.existsSync(getHighlightPath(analysisKey));
+}
+
+/**
+ * The board row for a player is their earliest clip at that score, but the
+ * snapshot shown is meant to be their most recent one, so a player who just
+ * matched their best is not represented by a stale photo.
+ */
+export function resolveHighlightEntry(
+  row: ScoreEntry,
+  scores: ScoreEntry[] = readScores()
+): ScoreEntry | null {
+  const playerKey = normalizePlayerName(row.name);
+  const tied = scores.filter(
+    (item) => normalizePlayerName(item.name) === playerKey && item.score === row.score
+  );
+  if (tied.length === 0) return null;
+
+  const withSnapshot = tied.filter((item) => hasHighlight(item.analysisKey));
+  const pool = withSnapshot.length > 0 ? withSnapshot : tied;
+
+  return pool.reduce((newest, item) => (item.createdAt > newest.createdAt ? item : newest), pool[0]);
 }
 
 function readAnalysisCache(): AnalysisCacheFile {

@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Image,
+  Pressable,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -42,12 +44,23 @@ interface PlayerScore {
   score: number;
   createdAt?: number;
   rank?: number;
+  highlightUrl?: string;
 }
 
 const NAME_CHARACTERS = /[^A-Za-z '\-]/g;
 
 function toCapitals(raw: string): string {
   return raw.replace(NAME_CHARACTERS, '').toUpperCase();
+}
+
+function playerInitials(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase();
 }
 
 export default function HomeScreen({ navigation }: Props) {
@@ -59,6 +72,9 @@ export default function HomeScreen({ navigation }: Props) {
   const [givenName, setGivenName] = useState('');
   const [activeField, setActiveField] = useState<'family' | 'given' | null>(null);
   const [pendingAction, setPendingAction] = useState<'record' | 'upload' | null>(null);
+  const [snapshotPlayer, setSnapshotPlayer] = useState<PlayerScore | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [snapshotFailed, setSnapshotFailed] = useState(false);
 
   const heroOpacity = useRef(new Animated.Value(0)).current;
   const heroTranslateY = useRef(new Animated.Value(18)).current;
@@ -176,6 +192,17 @@ export default function HomeScreen({ navigation }: Props) {
     }
   }
 
+  function openSnapshot(player: PlayerScore) {
+    if (!player.highlightUrl) return;
+    setSnapshotLoading(true);
+    setSnapshotFailed(false);
+    setSnapshotPlayer(player);
+  }
+
+  function closeSnapshot() {
+    setSnapshotPlayer(null);
+  }
+
   function askName(action: 'record' | 'upload') {
     setFamilyName('');
     setGivenName('');
@@ -230,15 +257,26 @@ export default function HomeScreen({ navigation }: Props) {
       >
         <Animated.View
           style={[
-            styles.heroCard,
+            styles.heroWrap,
             { opacity: heroOpacity, transform: [{ translateY: heroTranslateY }] },
           ]}
         >
-          <Text style={styles.heroEyebrow}>PINGPONG STAR</Text>
-          <Text style={styles.heroTitle}>Ready to play?</Text>
-          <Text style={styles.heroSubtitle}>
-            Record a 10-second rally and see how the shot scores.
-          </Text>
+          <TouchableOpacity
+            style={styles.heroCard}
+            onPress={() => askName('record')}
+            activeOpacity={0.88}
+          >
+            <View style={styles.heroText}>
+              <Text style={styles.heroEyebrow}>PINGPONG STAR</Text>
+              <Text style={styles.heroTitle}>Rank now?</Text>
+              <Text style={styles.heroSubtitle}>
+                10-second rally · scored on stroke, posture, rotation and recovery
+              </Text>
+            </View>
+            <View style={styles.heroChevron}>
+              <Text style={styles.heroChevronText}>›</Text>
+            </View>
+          </TouchableOpacity>
         </Animated.View>
 
         <Animated.View
@@ -247,17 +285,6 @@ export default function HomeScreen({ navigation }: Props) {
             { opacity: actionsOpacity, transform: [{ translateY: actionsTranslateY }] },
           ]}
         >
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => askName('record')}
-            activeOpacity={0.85}
-          >
-            <View style={styles.primaryBadge}>
-              <View style={styles.primaryBadgeDot} />
-            </View>
-            <Text style={styles.primaryButtonText}>Record a clip</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.secondaryButton}
             onPress={() => askName('upload')}
@@ -273,10 +300,7 @@ export default function HomeScreen({ navigation }: Props) {
             { opacity: boardOpacity, transform: [{ translateY: boardTranslateY }] },
           ]}
         >
-          <View style={styles.boardHeader}>
-            <Text style={styles.boardTitle}>Top players</Text>
-            <Text style={styles.boardMeta}>top 5</Text>
-          </View>
+          <Text style={styles.boardTitle}>Top 5 players</Text>
 
           {loading ? (
             <ActivityIndicator size="small" color={colors.primary} style={styles.boardSpinner} />
@@ -288,51 +312,132 @@ export default function HomeScreen({ navigation }: Props) {
               const progress = rowAnimations.current[index];
 
               return (
-                <Animated.View
+                <TouchableOpacity
                   key={`${player.id ?? ''}-${player.name}-${player.score}-${player.createdAt ?? index}`}
-                  style={[
-                    styles.rankRow,
-                    {
-                      opacity: progress,
-                      transform: [
-                        {
-                          translateY: progress.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [14, 0],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
+                  onPress={() => openSnapshot(player)}
+                  disabled={!player.highlightUrl}
+                  activeOpacity={0.7}
                 >
-                  <View
-                    style={[styles.rankBadge, { backgroundColor: rankColor(rank) }]}
+                  <Animated.View
+                    style={[
+                      styles.rankRow,
+                      {
+                        opacity: progress,
+                        transform: [
+                          {
+                            translateY: progress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [14, 0],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
                   >
-                    <Text style={[styles.rankBadgeText, { color: rankTextColor(rank) }]}>
-                      {rank}
-                    </Text>
-                  </View>
-                  <Text style={styles.rankName} numberOfLines={1}>
-                    {player.name}
-                  </Text>
-                  <View style={styles.rankTrack}>
                     <View
-                      style={[
-                        styles.rankFill,
-                        {
-                          width: `${Math.round((player.score / MAX_SCORE) * 100)}%`,
-                          backgroundColor: rank === 1 ? colors.primary : colors.primarySoft,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.rankScore}>{player.score}</Text>
-                </Animated.View>
+                      style={[styles.rankBadge, { backgroundColor: rankColor(rank) }]}
+                    >
+                      <Text style={[styles.rankBadgeText, { color: rankTextColor(rank) }]}>
+                        {rank}
+                      </Text>
+                    </View>
+                    <Text style={styles.rankName} numberOfLines={1}>
+                      {player.name}
+                    </Text>
+                    <View style={styles.rankTrack}>
+                      <View
+                        style={[
+                          styles.rankFill,
+                          {
+                            width: `${Math.round((player.score / MAX_SCORE) * 100)}%`,
+                            backgroundColor: rank === 1 ? colors.primary : colors.primarySoft,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.rankScore}>{player.score}</Text>
+                    <Text style={styles.rankChevron}>
+                      {player.highlightUrl ? '›' : ' '}
+                    </Text>
+                  </Animated.View>
+                </TouchableOpacity>
               );
             })
           )}
         </Animated.View>
       </ScrollView>
+
+      <Modal
+        visible={snapshotPlayer !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={closeSnapshot}
+      >
+        <Pressable
+          style={[
+            styles.snapshotOverlay,
+            { paddingTop: insets.top, paddingBottom: insets.bottom },
+          ]}
+          onPress={closeSnapshot}
+        >
+          <Pressable style={styles.snapshotCard} onPress={() => {}}>
+            {snapshotPlayer ? (
+              <>
+                <View style={styles.snapshotHeader}>
+                  <View style={styles.snapshotAvatar}>
+                    <Text style={styles.snapshotAvatarText}>
+                      {playerInitials(snapshotPlayer.name)}
+                    </Text>
+                  </View>
+                  <View style={styles.snapshotIdentity}>
+                    <Text style={styles.snapshotName}>{snapshotPlayer.name}</Text>
+                    <Text style={styles.snapshotMeta}>
+                      {snapshotPlayer.rank ? `#${snapshotPlayer.rank} on the board` : 'On the board'}
+                    </Text>
+                  </View>
+                  <View style={styles.snapshotScoreBox}>
+                    <Text style={styles.snapshotScore}>{snapshotPlayer.score}</Text>
+                    <Text style={styles.snapshotScoreLabel}>points</Text>
+                  </View>
+                </View>
+
+                <View style={styles.snapshotFrame}>
+                  {snapshotFailed ? (
+                    <Text style={styles.snapshotFallback}>This moment could not be loaded.</Text>
+                  ) : (
+                    <Image
+                      source={{ uri: `${SERVER_URL}${snapshotPlayer.highlightUrl}` }}
+                      style={styles.snapshotImage}
+                      resizeMode="cover"
+                      onLoadStart={() => setSnapshotLoading(true)}
+                      onLoadEnd={() => setSnapshotLoading(false)}
+                      onError={() => {
+                        setSnapshotLoading(false);
+                        setSnapshotFailed(true);
+                      }}
+                    />
+                  )}
+                  {snapshotLoading && !snapshotFailed ? (
+                    <View style={styles.snapshotSpinner}>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    </View>
+                  ) : null}
+                </View>
+
+                <Text style={styles.snapshotCaption}>Best moment from this clip</Text>
+
+                <TouchableOpacity
+                  style={styles.snapshotClose}
+                  onPress={closeSnapshot}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.snapshotCloseText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={nameModalVisible}
@@ -426,11 +531,33 @@ const styles = StyleSheet.create({
     paddingTop: space.lg,
     paddingBottom: space.xl,
   },
+  heroWrap: {
+    marginBottom: space.md,
+  },
   heroCard: {
     backgroundColor: colors.primary,
     borderRadius: radius.xlarge,
     padding: space.lg,
-    marginBottom: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroText: {
+    flex: 1,
+    marginRight: space.sm,
+  },
+  heroChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroChevronText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.surface,
+    marginTop: -2,
   },
   heroEyebrow: {
     fontSize: fontSize.label,
@@ -453,34 +580,6 @@ const styles = StyleSheet.create({
   actionGroup: {
     marginBottom: space.md,
   },
-  primaryButton: {
-    height: 58,
-    borderRadius: radius.medium,
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: space.lg,
-  },
-  primaryBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.24)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: space.sm,
-  },
-  primaryBadgeDot: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: colors.surface,
-  },
-  primaryButtonText: {
-    fontSize: fontSize.button,
-    fontWeight: '700',
-    color: colors.surface,
-  },
   secondaryButton: {
     height: 48,
     borderRadius: radius.medium,
@@ -501,22 +600,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.xlarge,
     padding: space.md,
   },
-  boardHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    marginBottom: space.sm,
-  },
   boardTitle: {
     fontSize: fontSize.card,
     fontWeight: '700',
     color: colors.ink,
-  },
-  boardMeta: {
-    fontSize: fontSize.label,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: colors.primary,
+    marginBottom: space.sm,
   },
   boardSpinner: {
     marginVertical: space.xl,
@@ -566,6 +654,108 @@ const styles = StyleSheet.create({
     width: 28,
     textAlign: 'right',
     fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  rankChevron: {
+    width: 12,
+    textAlign: 'right',
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.muted,
+  },
+  snapshotOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(43,33,25,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: space.lg,
+  },
+  snapshotCard: {
+    width: '100%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.xlarge,
+    padding: space.md,
+  },
+  snapshotHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.sm,
+  },
+  snapshotAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.sm,
+  },
+  snapshotAvatarText: {
+    fontSize: fontSize.caption,
+    fontWeight: '700',
+    color: colors.surface,
+  },
+  snapshotIdentity: {
+    flex: 1,
+  },
+  snapshotName: {
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: colors.ink,
+  },
+  snapshotMeta: {
+    fontSize: fontSize.label,
+    color: colors.muted,
+  },
+  snapshotScoreBox: {
+    alignItems: 'flex-end',
+  },
+  snapshotScore: {
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.primary,
+    lineHeight: 32,
+  },
+  snapshotScoreLabel: {
+    fontSize: fontSize.label,
+    color: colors.muted,
+  },
+  snapshotFrame: {
+    height: 210,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  snapshotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  snapshotSpinner: {
+    position: 'absolute',
+  },
+  snapshotFallback: {
+    fontSize: fontSize.caption,
+    color: colors.muted,
+  },
+  snapshotCaption: {
+    fontSize: fontSize.label,
+    color: colors.muted,
+    marginTop: space.xs,
+  },
+  snapshotClose: {
+    height: 46,
+    borderRadius: radius.medium,
+    backgroundColor: colors.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: space.sm,
+  },
+  snapshotCloseText: {
+    fontSize: fontSize.body,
     fontWeight: '700',
     color: colors.ink,
   },

@@ -42,7 +42,7 @@ Requires `DASHSCOPE_API_KEY` in `server/.env` (Alibaba Qwen-VL via the OpenAI-co
 Four-screen stack (`App.tsx`, React Navigation v7, no headers):
 **Home → Record → TargetSelect → Result** (see `src/types/navigation.ts`).
 
-- `HomeScreen` — fetches `GET /api/scores`, animated bar chart of top ranks. A name modal gates both Record and Upload flows; `playerName` then travels through nav params to the Result screen and the score POST.
+- `HomeScreen` — fetches `GET /api/scores`, vertical top-5 list (one row per player, holding their best score). Tapping a row that has a `highlightUrl` opens a snapshot card with that clip's best moment. The hero card is itself the primary action, and a name modal (family/given fields, forced to capitals) gates both Record and Upload flows; `playerName` then travels through nav params to the Result screen and the score POST.
 - `RecordScreen` — `expo-camera` `recordAsync({ maxDuration: 10 })`. Upload path instead uses `expo-image-picker` (`src/utils/video.ts` enforces the same 10 s cap).
 - `TargetSelectScreen` — the orchestration hub. Flow on entry:
   1. `getVideoMd5(videoUri)` → try `POST /api/analyze/reuse` (server-side cache hit skips re-analysis entirely).
@@ -58,11 +58,12 @@ All animation uses Reanimated 4 / worklets / gesture-handler — `react-native-g
 - `index.ts` — mounts `/api/analyze` and `/api/scores`; `/health` for Render.
 - `routes/analyze.ts` — the analysis pipeline:
   - `POST /session` — multer upload (200 MB cap, field name `video`) → `fluent-ffmpeg` validates duration ≤10 s and extracts frames → returns a session id + first frame as a data-URL preview. Sessions live in an in-memory `Map` with a 30-min TTL; files under `server/uploads/` and `server/frames/` are cleaned up with the session.
-  - `POST /session/:id/select` — crops every extracted frame around the tapped normalized point, sends the crops to **qwen-vl-max** with a strict coaching rubric (4 × 0–25 dimensions: stroke mechanics, body posture, waist rotation, recovery), parses JSON out of the reply, and forces English via a rewrite pass if CJK chars slip in (`ensureEnglishFeedback`). Result is cached server-side by `analysisKey = {videoHash}:{pointKey}`.
+  - `POST /session/:id/select` — crops every extracted frame around the tapped normalized point, sends the crops to **qwen-vl-max** with a strict coaching rubric (4 × 0–25 dimensions: stroke mechanics, body posture, waist rotation, recovery), parses JSON out of the reply, and forces English via a rewrite pass if CJK chars slip in (`ensureEnglishFeedback`). The model also returns `highlightFrame` (1-based index of the clearest stroke); that crop is scaled to 720 px and kept in the highlights dir as the clip's snapshot. Falls back to the middle frame when the value is missing or out of range. Result is cached server-side by `analysisKey = {videoHash}:{pointKey}`.
   - `POST /reuse` — pure cache lookup; lets the client skip the upload entirely on identical video+point.
   - `POST /` — legacy single-shot upload+analyze (no session/tap); kept for compatibility.
   - `getUploadErrorResponse` maps ffmpeg/multer/error-message substrings to status codes and user-facing copy — new failure modes should be added there, not as ad-hoc `res.status(500)` calls.
-- `routes/scores.ts` — `GET /` returns top-5 (ties share a rank); `POST /` calls `saveScoreOnce`, which dedupes on `{nameKey}:{analysisKey}` so re-submitting the same analysis never double-posts.
+- `routes/scores.ts` — `GET /` returns top-5 (ties share a rank), each row carrying a `highlightUrl` when a snapshot exists for it; `GET /highlight/:entryId` streams that JPEG. `POST /` calls `saveScoreOnce`, which dedupes on `{nameKey}:{analysisKey}` so re-submitting the same analysis never double-posts.
+- `utils/scoreReset.ts` — one-time boot step that empties the scores file, flagged by `.scores-cleared-v1`. It exists because records written before snapshots cannot show a best moment.
 - `utils/persistence.ts` — JSON-file storage. `SCORES_FILE` env var wins; on Render it resolves to `/var/data/scores.json` when that mount exists, else `server/scores.json`. Analysis cache lives next to it as `analysis-cache.json`. **Data does not survive a redeploy unless the disk is mounted** — noted in `DEPLOY_APK.md`.
 
 ## Gotchas
