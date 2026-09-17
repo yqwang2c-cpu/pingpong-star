@@ -83,3 +83,12 @@ query_expo.py
 patch_env_paths.js
 eas-cli-*.tgz
 env-paths-*.tgz
+
+# agent working data (never commit)
+.workbuddy/
+
+# generated share packages
+.trae-html-share-packages/
+
+# generated design documents
+monetization-architecture/
