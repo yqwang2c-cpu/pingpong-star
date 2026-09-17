@@ -23,6 +23,24 @@ export interface ScoreEntry {
   createdAt: number;
   dedupeKey?: string;
   analysisKey?: string;
+  /** Player profile this clip belongs to. Absent on records written before accounts existed. */
+  playerId?: string;
+  /** Denormalised from the owning account so per-account rollups stay a single read. */
+  accountId?: string;
+}
+
+/**
+ * Records used to be grouped purely by their normalised name, which cannot tell
+ * two children with the same name apart and loses history when a name is
+ * corrected. A playerId wins whenever it is present; everything recorded before
+ * accounts shipped still falls back to the name, so old clips keep ranking.
+ */
+export function playerIdentityKey(
+  entry: Pick<ScoreEntry, 'playerId' | 'nameKey' | 'name'>
+): string {
+  if (entry.playerId) return entry.playerId;
+  if (entry.nameKey) return entry.nameKey;
+  return normalizePlayerName(entry.name);
 }
 
 export type RankedScoreEntry = ScoreEntry & { rank: number };
@@ -117,9 +135,9 @@ export function resolveHighlightEntry(
   row: ScoreEntry,
   scores: ScoreEntry[] = readScores()
 ): ScoreEntry | null {
-  const playerKey = normalizePlayerName(row.name);
+  const playerKey = playerIdentityKey(row);
   const tied = scores.filter(
-    (item) => normalizePlayerName(item.name) === playerKey && item.score === row.score
+    (item) => playerIdentityKey(item) === playerKey && item.score === row.score
   );
   if (tied.length === 0) return null;
 
@@ -175,15 +193,15 @@ export function rankScores(allScores: ScoreEntry[]): RankedScoreEntry[] {
 }
 
 export function bestScorePerPlayer(scores: ScoreEntry[]): ScoreEntry[] {
-  const bestByName = new Map<string, ScoreEntry>();
+  const bestByPlayer = new Map<string, ScoreEntry>();
 
   for (const entry of scores) {
-    const playerKey = normalizePlayerName(entry.name);
+    const playerKey = playerIdentityKey(entry);
     if (!playerKey) continue;
 
-    const existing = bestByName.get(playerKey);
+    const existing = bestByPlayer.get(playerKey);
     if (!existing) {
-      bestByName.set(playerKey, entry);
+      bestByPlayer.set(playerKey, entry);
       continue;
     }
 
@@ -192,11 +210,11 @@ export function bestScorePerPlayer(scores: ScoreEntry[]): ScoreEntry[] {
       entry.score === existing.score && entry.createdAt < existing.createdAt;
 
     if (higherScore || sameScoreButOlder) {
-      bestByName.set(playerKey, entry);
+      bestByPlayer.set(playerKey, entry);
     }
   }
 
-  return [...bestByName.values()];
+  return [...bestByPlayer.values()];
 }
 
 export function getLeaderboard(scores: ScoreEntry[] = readScores()): RankedScoreEntry[] {
@@ -239,15 +257,15 @@ function getLeaderboardPlacement(entryId: string, scores: ScoreEntry[]): Leaderb
     };
   }
 
-  const playerKey = normalizePlayerName(targetEntry.name);
-  const playerEntries = scores.filter((item) => normalizePlayerName(item.name) === playerKey);
+  const playerKey = playerIdentityKey(targetEntry);
+  const playerEntries = scores.filter((item) => playerIdentityKey(item) === playerKey);
   const personalBestScore = playerEntries.reduce(
     (best, item) => (item.score > best ? item.score : best),
     targetEntry.score
   );
   const aheadCount = playerEntries.filter((item) => item.score > targetEntry.score).length;
 
-  const rankedEntry = rankedAll.find((item) => normalizePlayerName(item.name) === playerKey) ?? null;
+  const rankedEntry = rankedAll.find((item) => playerIdentityKey(item) === playerKey) ?? null;
   const isPersonalBest = targetEntry.score >= personalBestScore;
   // Claiming a place on the board is only honest when this clip is the row the
   // board already shows for that player, since the two screens would otherwise
@@ -274,14 +292,21 @@ export function saveScoreOnce({
   name,
   score,
   analysisKey,
+  playerId,
+  accountId,
 }: {
   name: string;
   score: number;
   analysisKey?: string;
+  playerId?: string;
+  accountId?: string;
 }) {
   const scores = readScores();
   const nameKey = normalizePlayerName(name);
-  const dedupeKey = analysisKey ? `${nameKey}:${analysisKey}` : undefined;
+  // Two children analysing the same clip at the same point are two records, not
+  // one, so the identity key has to be part of what makes a submission unique.
+  const identityKey = playerIdentityKey({ name, nameKey, playerId });
+  const dedupeKey = analysisKey ? `${identityKey}:${analysisKey}` : undefined;
   const existingEntry = dedupeKey
     ? scores.find((entry) => entry.dedupeKey === dedupeKey)
     : undefined;
@@ -296,6 +321,8 @@ export function saveScoreOnce({
       createdAt: Date.now(),
       dedupeKey,
       analysisKey,
+      playerId,
+      accountId,
     } satisfies ScoreEntry);
 
   if (!existingEntry) {

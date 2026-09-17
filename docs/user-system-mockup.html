@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" data-page-node-id="9coQRkbgbRPASgsLAwxDvj">
+<head data-page-node-id="ZYeRGngMDDVe7vIVh2FtOJ">
+<meta charset="utf-8" data-page-node-id="k6QI9f2FV1YMp7B3Fak9eZ">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="jBnifdBqCmOBE7OIyBChPS">
+<title>PingPong Star · user system UI draft</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 32px 64px;
+    background: #F5EFE9;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: #2B2119;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 6px; }
+  .lede { font-size: 13px; color: #6B5B4B; margin: 0 0 28px; line-height: 1.6; }
+  .row { display: flex; gap: 30px; flex-wrap: wrap; }
+  figure { margin: 0; }
+  .phone {
+    width: 320px; height: 660px;
+    background: #FFF7ED;
+    border-radius: 38px;
+    border: 10px solid #2B2119;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    position: relative;
+  }
+  .screen { padding: 22px 18px; flex: 1; display: flex; flex-direction: column; }
+  figcaption { margin-top: 12px; font-size: 13px; font-weight: 600; text-align: center; }
+  figcaption span { display: block; font-weight: 400; font-size: 12px; color: #6B5B4B; margin-top: 3px; }
+
+  .tag {
+    display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .6px;
+    background: #FFE3D3; color: #FF6B2C; border-radius: 999px; padding: 3px 8px; margin-bottom: 8px;
+  }
+  .center { text-align: center; }
+  .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; color: rgba(255,255,255,.8); }
+  .h-title { font-size: 24px; font-weight: 700; margin: 0 0 6px; }
+  .sub { font-size: 14px; line-height: 1.5; color: #6B5B4B; }
+  .sub-light { font-size: 14px; line-height: 1.5; color: rgba(255,255,255,.88); }
+
+  .mark {
+    width: 64px; height: 64px; border-radius: 32px; background: #FF6B2C;
+    display: flex; align-items: center; justify-content: center; margin: 44px auto 16px;
+  }
+  .mark i { width: 22px; height: 22px; border-radius: 11px; background: #FFF7ED; display: block; }
+
+  .google {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    height: 50px; border-radius: 16px; background: #fff;
+    border: 1px solid #F0E2D6; font-size: 15px; font-weight: 600; color: #2B2119;
+    margin-top: auto; width: 100%;
+  }
+  .fineprint { font-size: 11px; color: #A08B78; text-align: center; line-height: 1.6; margin-top: 14px; }
+
+  .player {
+    display: flex; align-items: center; gap: 12px;
+    background: #fff; border-radius: 20px; padding: 14px; margin-bottom: 10px;
+    border: 1.5px solid transparent;
+  }
+  .player.on { border-color: #FF6B2C; }
+  .avatar { width: 42px; height: 42px; border-radius: 21px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 700; }
+  .pname { font-size: 16px; font-weight: 700; }
+  .pmeta { font-size: 12px; color: #6B5B4B; margin-top: 2px; }
+  .check { margin-left: auto; width: 22px; height: 22px; border-radius: 11px; background: #FF6B2C; color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+  .ghost {
+    height: 48px; border-radius: 16px; border: 1px solid #FFD9BF; background: #fff;
+    color: #FF6B2C; font-size: 14px; font-weight: 600; margin-top: auto; width: 100%;
+  }
+  .signout { text-align: center; font-size: 11px; color: #A08B78; margin-top: 14px; }
+
+  .who {
+    display: flex; align-items: center; gap: 10px; background: #fff;
+    border-radius: 20px; padding: 10px 12px; margin-bottom: 14px;
+  }
+  .who .avatar { width: 34px; height: 34px; border-radius: 17px; font-size: 12px; }
+  .who .pname { font-size: 14px; }
+  .switch { margin-left: auto; font-size: 13px; font-weight: 600; color: #FF6B2C; }
+
+  .hero {
+    background: #FF6B2C; border-radius: 24px; padding: 18px;
+    display: flex; align-items: center; margin-bottom: 10px;
+  }
+  .chev { width: 30px; height: 30px; border-radius: 15px; background: rgba(255,255,255,.24); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .hero-text { flex: 1; margin-right: 8px; }
+
+  .board { background: #fff; border-radius: 24px; padding: 14px; }
+  .board h3 { margin: 0 0 10px; font-size: 17px; font-weight: 700; }
+  .rank { display: flex; align-items: center; margin-bottom: 10px; }
+  .badge { width: 22px; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-right: 10px; }
+  .rname { width: 82px; font-size: 12px; font-weight: 600; }
+  .track { flex: 1; height: 8px; border-radius: 4px; background: #F0E2D6; overflow: hidden; margin-right: 8px; }
+  .fill { height: 8px; border-radius: 4px; }
+  .rscore { width: 26px; text-align: right; font-size: 12px; font-weight: 700; }
+  .rchev { width: 12px; text-align: right; font-size: 12px; font-weight: 700; color: #A08B78; }
+</style>
+</head>
+<body data-page-node-id="34SBDNaNEWTk3Po6PAzPFE">
+
+<h1 data-page-node-id="D2hg2CitmN7A8KJFucfv7Y">User system · UI draft v1</h1>
+<p class="lede" data-page-node-id="EotTlcLljqCzUX8UIMVW33">Three screens change: sign in (new), pick a player (replaces the name entry modal), home (adds the current player bar). Interface stays in English.</p>
+
+<div class="row" data-page-node-id="G4lTmhceMBx61twgi5kby1">
+
+  <figure data-page-node-id="DrwKspxg9ReZZIGYxH5nL4">
+    <div class="phone" data-page-node-id="1KeDigH1FO7M1737X40Lq2">
+      <div class="screen center" data-page-node-id="7BWFubDSni6RsDmLMvXKPy">
+        <div class="mark" data-page-node-id="dQiKmaEzgnEp0nBVpKjrfv"><i data-page-node-id="BeyZztE8EcbbwP3N4MpA7J"></i></div>
+        <div class="h-title" data-page-node-id="FkhGZitCOCXSJuXdwGdDyj">PingPong Star</div>
+        <p class="sub" style="margin:0 auto 0; max-width:240px;" data-page-node-id="jSmjW1idUu4RsCBsd0BhIS">Sign in once to keep every score under your children's profiles.</p>
+        <div style="flex:1" data-page-node-id="PB3j6YDeL1NBTq14Kj0969"></div>
+        <div class="tag" data-page-node-id="unahRV0VooBynR1HmQlsvs">NEW SCREEN</div>
+        <button class="google" data-page-node-id="C0diSldzPZeV9ImP58VFIO">
+          <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true" data-page-node-id="w4vDhMUlaAKen3zudx1YG7">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" data-page-node-id="udfUQvYQnrD31D6Z8Kqmuh"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" data-page-node-id="wY8Pz3jQ5QJUugVHD7i1W7"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" data-page-node-id="u34oqE99rqG5cbUAAuZpWZ"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" data-page-node-id="eWyFqEZrztAXVn2ZVOAsbr"/>
+          </svg>
+          Continue with Google
+        </button>
+        <p class="fineprint" data-page-node-id="ub1v5RRn9h8Lod2E1khido">Only the parent signs in. A child profile stores nothing but a name.</p>
+      </div>
+    </div>
+    <figcaption data-page-node-id="oDgif8c8mDk8RUfGDXYJaI">1 · Sign in<span data-page-node-id="21bcIxsJ0EIGLQnBHY9Kh5">New. Shown only when there is no saved session.</span></figcaption>
+  </figure>
+
+  <figure data-page-node-id="BPrTgYjXgE8He0DZTFbt8y">
+    <div class="phone" data-page-node-id="kkHQ2dEXZOSv05zamelIox">
+      <div class="screen" data-page-node-id="sPELkuyJCAEmtL2rHDpFcC">
+        <div class="tag" data-page-node-id="L2bWrVBhBcInwZo4aeZn3U">REPLACES NAME ENTRY</div>
+        <div class="h-title" style="margin-bottom:4px;" data-page-node-id="DE2bMYbkVGoOmml8YUo7Mx">Who's playing?</div>
+        <p class="sub" style="margin:0 0 18px;" data-page-node-id="sJrvkPq0Ba1O2UntU4BJ1G">Pick a player before recording.</p>
+
+        <div class="player on" data-page-node-id="vG7sHdEULQK3ekffIGC4TQ">
+          <div class="avatar" style="background:#FF6B2C;" data-page-node-id="2c6yJfuxegLh35UvbuajIC">WY</div>
+          <div data-page-node-id="QOmXiEqH2RDIwxuoEDadFj">
+            <div class="pname" data-page-node-id="bGrQEXanVEQvqUt9awHWBd">WANG YANYI</div>
+            <div class="pmeta" data-page-node-id="QM4CMpb2c3tJBOJoagQ2tp">Best 82 · 6 clips</div>
+          </div>
+          <div class="check" data-page-node-id="I9TE5xAoEiyHjuFGA6dlJW">&#10003;</div>
+        </div>
+
+        <div class="player" data-page-node-id="wMCTHuHUp2IuNoBXyBw9Il">
+          <div class="avatar" style="background:#FFC53D; color:#7A4A00;" data-page-node-id="ZbCMIoTIUYDuYjW2IC4m5o">WC</div>
+          <div data-page-node-id="9PhKG8vYkiFVARTVqgEYhc">
+            <div class="pname" data-page-node-id="WK6lglQOADK2jBQIRugLzi">WANG CHONGHUA</div>
+            <div class="pmeta" data-page-node-id="iyzdx305TwHffT7RLsD0BB">Best 76 · 3 clips</div>
+          </div>
+        </div>
+
+        <div class="player" data-page-node-id="iF3jJ8QDBXI1kooOW3PDXh">
+          <div class="avatar" style="background:#CBD5E1; color:#475569;" data-page-node-id="dwcA9WsgHroqdIitTwcmPb">LI</div>
+          <div data-page-node-id="I5JFJ0eRxibykeRz5hz8OO">
+            <div class="pname" data-page-node-id="9QCIA3O9GfADH2Ck64XvJV">LI MING</div>
+            <div class="pmeta" data-page-node-id="z0D3mGSVss2EM0dL4yn2A2">No clips yet</div>
+          </div>
+        </div>
+
+        <button class="ghost" data-page-node-id="vPpHpZ7sJfw6IpUh8vy35K">Add a player</button>
+        <div class="signout" data-page-node-id="Xz9zTK8h4EPaChuEARJe8j">Signed in as parent@gmail.com · Sign out</div>
+      </div>
+    </div>
+    <figcaption data-page-node-id="su84EQPNGm4KVmlnSTPeFE">2 · Pick a player<span data-page-node-id="e5kHkKpZ4gNHFLobuS8mHX">Replaces the family / given name modal. Name is typed once, at creation.</span></figcaption>
+  </figure>
+
+  <figure data-page-node-id="oc0qE6mwxFDyU1qAKtlEVL">
+    <div class="phone" data-page-node-id="8nPMCBKLjkgPIcdtoYFzKs">
+      <div class="screen" data-page-node-id="zUf7T8shX2FMHVnto8Dl8W">
+        <div class="who" data-page-node-id="SR1FvAVqokrWSBOW8E0OlW">
+          <div class="avatar" style="background:#FF6B2C;" data-page-node-id="L6qSOgLLR0TZlXIJ2KrbyG">WY</div>
+          <div data-page-node-id="yYOKUaDfOSMCTlUpqd3tqN">
+            <div class="pname" data-page-node-id="TbLabkYpdKenSpEG6dupMi">WANG YANYI</div>
+          </div>
+          <div class="switch" data-page-node-id="e9jOLj7SSTAsqCViKU40xv">Switch</div>
+        </div>
+
+        <div class="hero" data-page-node-id="zWxkj9ovAgBUzBKBCyLatn">
+          <div class="hero-text" data-page-node-id="AEqGn2X4UPcY1cSWZJejLc">
+            <div class="eyebrow" data-page-node-id="DqX0NQEMet7BTHDrK1znF5">PINGPONG STAR</div>
+            <div style="font-size:24px;font-weight:700;color:#fff;margin-bottom:4px;" data-page-node-id="fYmAL13oduG7VSuuhKCXNV">Rank now?</div>
+            <div class="sub-light" data-page-node-id="FZs6YfBdJaum7CxxTzgC9M">10-second rally · scored on stroke, posture, rotation and recovery</div>
+          </div>
+          <div class="chev" data-page-node-id="pv7Po1MxXwstxzmeKrFrVL">&rsaquo;</div>
+        </div>
+
+        <button class="ghost" style="margin-top:0; margin-bottom:14px;" data-page-node-id="hHHVpOwt2kdXJ7eXkh9F8W">Upload from gallery</button>
+
+        <div class="board" data-page-node-id="prWqL4j6RlEwBuI3w3xkae">
+          <h3 data-page-node-id="OdnCsN2zlREO9QusMEZsoP">Top 5 players</h3>
+          <div class="rank" data-page-node-id="XWQE4vA6d4NblTACjhlwLs">
+            <div class="badge" style="background:#FFC53D; color:#7A4A00;" data-page-node-id="OfCpjvP8MFA6NUXLL5JmWG">1</div>
+            <div class="rname" data-page-node-id="bCtFB7Nq6ytro2OZFwF2AD">WANG YANYI</div>
+            <div class="track" data-page-node-id="0zc3LpE4IFFYq8VPl271LW"><div class="fill" style="width:82%; background:#FF6B2C;" data-page-node-id="PCfnzaAKlfa6LnetvHjGkX"></div></div>
+            <div class="rscore" data-page-node-id="GmHBbEvgfy4NYup6Hi0Y7N">82</div>
+            <div class="rchev" data-page-node-id="8jFehQBFeAQhSXud2qJjoo">&rsaquo;</div>
+          </div>
+          <div class="rank" data-page-node-id="p0Jkid5aZyMZsDy8AYoPe9">
+            <div class="badge" style="background:#CBD5E1; color:#475569;" data-page-node-id="DisYZSL2EnGfDCUa19uRbV">2</div>
+            <div class="rname" data-page-node-id="K6pBjEv30jbjiIJHq3hRNJ">WANG CHONGHUA</div>
+            <div class="track" data-page-node-id="r5yyB3mDq2FOAWiDjkDx2w"><div class="fill" style="width:76%; background:#FF9066;" data-page-node-id="BOrCehj4gh7LAUe7uNG1Jr"></div></div>
+            <div class="rscore" data-page-node-id="KzoqCrovJlhGAQRgCimDYt">76</div>
+            <div class="rchev" data-page-node-id="gYO2JqOiQJ4lRpAopp9rMx">&rsaquo;</div>
+          </div>
+          <div class="rank" data-page-node-id="XKkNUbGuF6sV5DFHiFFV71">
+            <div class="badge" style="background:#E8A87C; color:#7A3C10;" data-page-node-id="HvZo41QACTnIl8VWamkCnG">3</div>
+            <div class="rname" data-page-node-id="rWtQLw1q7IGaqhcogQrncV">ZHANG WEI</div>
+            <div class="track" data-page-node-id="7WeDLdHolUJEgcv3FYR40M"><div class="fill" style="width:71%; background:#FF9066;" data-page-node-id="wwZSpX33iYTR9FwcgiFPDy"></div></div>
+            <div class="rscore" data-page-node-id="A8b8GOg8sMVqpwShLY9aDk">71</div>
+            <div class="rchev" data-page-node-id="n0yFaSnzvOIpOF6mhgsuTm">&rsaquo;</div>
+          </div>
+          <div class="rank" data-page-node-id="Xu534PmyPymC3DD1p6xjUu">
+            <div class="badge" style="background:#F5E6DA; color:#A08B78;" data-page-node-id="1LiFXzAys2KzFIjbIAZR09">4</div>
+            <div class="rname" data-page-node-id="Dx1rIPWqBgX4Mxt1c9FwlO">LI MING</div>
+            <div class="track" data-page-node-id="HD1hJotey0zQX7lNSJ551d"><div class="fill" style="width:64%; background:#FF9066;" data-page-node-id="FoLhggUFcb1IsFBVR8EHaA"></div></div>
+            <div class="rscore" data-page-node-id="0dxDdiKLawnz1k4GFrYh83">64</div>
+            <div class="rchev" data-page-node-id="3KJvoLqxc6AxsxJAO2H9y4">&rsaquo;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption data-page-node-id="CQfSXywJHnHWWVt87L21Ja">3 · Home<span data-page-node-id="JoNCuURGdlwcfPsvuuhPHx">Adds the current player bar. Tapping the hero goes straight to recording.</span></figcaption>
+  </figure>
+
+</div>
+
+</body>
+</html>

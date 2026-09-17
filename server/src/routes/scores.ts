@@ -50,10 +50,12 @@ router.get('/highlight/:entryId', (req, res): void => {
 });
 
 router.post('/', (req, res): void => {
-  const { name, score, analysisKey } = req.body as {
+  const { name, score, analysisKey, playerId, accountId } = req.body as {
     name?: string;
     score?: unknown;
     analysisKey?: unknown;
+    playerId?: unknown;
+    accountId?: unknown;
   };
   if (!name || typeof score !== 'number') {
     res.status(400).json({ error: 'Both name (string) and score (number) are required.' });
@@ -65,10 +67,25 @@ router.post('/', (req, res): void => {
     return;
   }
 
+  if (playerId !== undefined && typeof playerId !== 'string') {
+    res.status(400).json({ error: 'playerId must be a string when provided.' });
+    return;
+  }
+
+  if (accountId !== undefined && typeof accountId !== 'string') {
+    res.status(400).json({ error: 'accountId must be a string when provided.' });
+    return;
+  }
+
+  // TODO(user-system): once the requireAccount middleware lands, derive the
+  // name from the player profile instead of trusting the request body, and
+  // reject any playerId that does not belong to the caller's account.
   const result = saveScoreOnce({
     name,
     score,
     analysisKey,
+    playerId,
+    accountId,
   });
 
   res.json({

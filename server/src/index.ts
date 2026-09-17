@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import analyzeRouter from './routes/analyze';
 import scoresRouter from './routes/scores';
+import { runLegacyScoreReset } from './utils/legacyScoreReset';
 import { runNameNormalizationMigration } from './utils/nameMigration';
 import { runScoreReset } from './utils/scoreReset';
 
@@ -20,6 +21,7 @@ app.use('/api/scores', scoresRouter);
 
 runScoreReset();
 runNameNormalizationMigration();
+runLegacyScoreReset();
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running: http://localhost:${PORT}`);

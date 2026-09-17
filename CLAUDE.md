@@ -62,9 +62,10 @@ All animation uses Reanimated 4 / worklets / gesture-handler — `react-native-g
   - `POST /reuse` — pure cache lookup; lets the client skip the upload entirely on identical video+point.
   - `POST /` — legacy single-shot upload+analyze (no session/tap); kept for compatibility.
   - `getUploadErrorResponse` maps ffmpeg/multer/error-message substrings to status codes and user-facing copy — new failure modes should be added there, not as ad-hoc `res.status(500)` calls.
-- `routes/scores.ts` — `GET /` returns top-5 (ties share a rank), each row carrying a `highlightUrl` when a snapshot exists for it; `GET /highlight/:entryId` streams that JPEG. `POST /` calls `saveScoreOnce`, which dedupes on `{nameKey}:{analysisKey}` so re-submitting the same analysis never double-posts.
+- `routes/scores.ts` — `GET /` returns top-5 (ties share a rank), each row carrying a `highlightUrl` when a snapshot exists for it; `GET /highlight/:entryId` streams that JPEG. `POST /` accepts optional `playerId` / `accountId` and calls `saveScoreOnce`, which dedupes on `{identityKey}:{analysisKey}` so re-submitting the same analysis for the same child never double-posts.
 - `utils/scoreReset.ts` — one-time boot step that empties the scores file, flagged by `.scores-cleared-v1`. It exists because records written before snapshots cannot show a best moment.
-- `utils/persistence.ts` — JSON-file storage. `SCORES_FILE` env var wins; on Render it resolves to `/var/data/scores.json` when that mount exists, else `server/scores.json`. Analysis cache lives next to it as `analysis-cache.json`. **Data does not survive a redeploy unless the disk is mounted** — noted in `DEPLOY_APK.md`.
+- `utils/legacyScoreReset.ts` — drops records written before player accounts existed (no `playerId`), including their snapshots. Opt-in via `CLEAR_LEGACY_SCORES=true` and one-shot via `.scores-cleared-v2`; anything already filed under a profile is kept. Flip it on the deploy that ships accounts, not before.
+- `utils/persistence.ts` — JSON-file storage. **A record's identity is `playerId ?? nameKey`** (`playerIdentityKey`), so two children with the same name rank separately once they have profiles, while records written before accounts still group by name. `SCORES_FILE` env var wins; on Render it resolves to `/var/data/scores.json` when that mount exists, else `server/scores.json`. Analysis cache lives next to it as `analysis-cache.json`. **Data does not survive a redeploy unless the disk is mounted** — noted in `DEPLOY_APK.md`.
 
 ## Gotchas
 
