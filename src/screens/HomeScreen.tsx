@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
   Alert,
   Modal,
@@ -15,6 +14,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
@@ -51,6 +51,7 @@ function toCapitals(raw: string): string {
 }
 
 export default function HomeScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const [leaderboard, setLeaderboard] = useState<PlayerScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [nameModalVisible, setNameModalVisible] = useState(false);
@@ -340,7 +341,10 @@ export default function HomeScreen({ navigation }: Props) {
         onRequestClose={closeNameModal}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top, paddingBottom: insets.bottom },
+          ]}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <View style={styles.modalCard}>

@@ -7,13 +7,13 @@ import {
   Easing,
   Image,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
@@ -286,11 +286,17 @@ export default function TargetSelectScreen({ navigation, route }: Props) {
 
       const qualified = data.leaderboard?.qualified === true;
       const reused = data.reused === true;
+      const personal = readPersonalStanding(data.leaderboard?.personal);
+      const rawRank = typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null;
+
       return {
         qualified,
-        rank: typeof data.leaderboard?.rank === 'number' ? data.leaderboard.rank : null,
-        celebrate: qualified && !reused,
-        personal: readPersonalStanding(data.leaderboard?.personal),
+        // A backend that does not send the personal breakdown predates the fix
+        // and quotes the position of the player's best row instead of this clip,
+        // so its rank has to be discarded rather than shown.
+        rank: personal ? rawRank : null,
+        celebrate: Boolean(personal) && qualified && !reused,
+        personal,
       };
     } catch {
       return getDefaultPlacement();

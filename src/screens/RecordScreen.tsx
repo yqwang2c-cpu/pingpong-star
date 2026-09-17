@@ -4,11 +4,13 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   Animated,
   Easing,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useFocusEffect } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
@@ -52,6 +54,15 @@ export default function RecordScreen({ navigation, route }: Props) {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // The camera fills the whole screen with a dark surface, so the status bar
+  // icons have to flip light while this screen is on top and back on the way out.
+  useFocusEffect(
+    React.useCallback(() => {
+      setStatusBarStyle('light');
+      return () => setStatusBarStyle('dark');
+    }, [])
+  );
 
   useEffect(() => {
     Animated.parallel([
