@@ -19,6 +19,7 @@ import {
   makeAnalysisKey,
   setCachedAnalysis,
   type PointSelection,
+  type ScoreDimensions,
 } from '../utils/persistence';
 
 const router = Router();
@@ -71,8 +72,15 @@ const SESSION_TTL_MS = 30 * 60 * 1000;
 const sessions = new Map<string, AnalyzeSession>();
 
 function deleteFileIfExists(filePath: string) {
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  // Cleanup is best-effort. A locked, already-removed, or permission-blocked
+  // temp frame must never bubble out of a `finally` block and crash the
+  // process after the analysis response has already been sent.
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (err) {
+    console.error('Could not remove a temporary analysis file:', err);
   }
 }
 
@@ -238,51 +246,93 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
   };
 }
 
-const COACHING_PROMPT = `You are a strict professional table tennis coach reviewing a sequence of frames from a young student's practice video. Score strictly so the child gets honest, actionable feedback.
+interface QwenAnalysis {
+  score: number;
+  strengths: string[];
+  improvements: string[];
+  highlightFrame: number;
+  dimensions: ScoreDimensions | null;
+  frameNotes: string[];
+}
 
-## Scoring dimensions (0-25 points each)
+const DIMENSION_KEYS: (keyof ScoreDimensions)[] = ['stroke', 'posture', 'rotation', 'recovery'];
 
-### 1. Stroke mechanics (0-25)
-- 0-5: The stroke is clearly incorrect, or the swing cannot be seen.
-- 6-12: A swing exists but is incomplete. Forehand does not reach up well, or backhand wrist is visibly bent.
-- 13-19: Mostly correct with noticeable technical flaws.
-- 20-25: Clear, relaxed, technically sound stroke. Forehand reaches high; backhand wrist stays stable.
+function buildCoachingPrompt(frameCount: number): string {
+  return `You are a professional table tennis coach assessing ONE young player from ${frameCount} frames of a short practice clip. The images are in chronological order and cropped around the same player, so together they form one continuous movement sequence.
 
-### 2. Body posture (0-25)
-- 0-5: Standing upright or leaning backward, without an athletic stance.
-- 6-12: Slight bend only, unstable core, weight too far back.
-- 13-19: Mostly stable posture with occasional balance issues.
-- 20-25: Low, balanced stance throughout, weight forward, core engaged.
+## Read the sequence before scoring
+- Write one short, concrete observation for EVERY frame in "frameNotes" (exactly ${frameCount} entries, starting "Frame 1: ", "Frame 2: ", ...). Note what is actually visible: racket position, ball, torso and hip turn, knee bend, weight placement, and whether the player is preparing, making contact, following through, or recovering.
+- Judge the timing dimensions by COMPARING frames. Waist rotation means hips and shoulders turning between preparation and contact. Recovery means moving back toward a ready stance in the frames AFTER contact. Never guess either from a single frame.
+- Motion blur on the racket or arm is normal for a fast, powerful swing. Treat it as evidence of racket speed. NEVER score a dimension low merely because the swing is blurred.
+- The frames are cropped around the player, so the ball or parts of the table may be out of view. Do not penalise a stroke for that.
 
-### 3. Waist rotation (0-25)
-- 0-5: No waist rotation, mostly arm-only motion.
-- 6-12: Some rotation but either too large or too small.
-- 13-19: Waist rotation helps generate power and is mostly controlled.
-- 20-25: Smooth, efficient waist-driven motion with strong control.
+## Score four dimensions independently, 0-25 each. Use the FULL range.
 
-### 4. Recovery (0-25)
-- 0-5: Freezes after contact and does not recover.
-- 6-12: Tries to recover but slowly, taking more than one second.
-- 13-19: Usually recovers in time.
-- 20-25: Quickly returns to a neutral ready position after each stroke.
+### stroke (0-25) - racket path and contact
+0-5: no stroke, racket not visible, or an obviously incorrect swipe.
+6-12: arm-only swing with no visible contact or follow-through.
+13-19: recognisable stroke, visible contact, partial follow-through, one clear flaw.
+20-25: clear accelerated swing, clean contact point, complete relaxed follow-through.
 
-## Strict evaluation rules
-- Default to lower scores. "Looks okay" is not enough for a medium or high score.
-- If you cannot clearly see a movement, assume it is not done well and score 0-5 in that area.
-- 60 is a passing score. A normal beginner should often score around 40-55. Only clearly solid technique should pass.
-- If the frames do not show a table tennis practice scene, give 0 in every dimension.
-- All returned text must be English only.
-- Never use Chinese characters in strengths or improvements.
+### posture (0-25) - stance and balance
+0-5: standing straight or leaning back, no athletic stance.
+6-12: slight knee bend, weight back, unstable core.
+13-19: mostly stable and low, with one visible balance flaw.
+20-25: knees bent, weight forward, balanced head and engaged core throughout.
 
-The images you are given are frames in chronological order: the first image is frame 1, the second is frame 2, and so on. Also return "highlightFrame", the number of the single frame that best shows the stroke. Prefer the moment of contact with the ball. If every frame is equally poor, return the frame where the player is clearest.
+### rotation (0-25) - waist and hip drive across frames
+0-5: no torso change between frames, purely arm-driven.
+6-12: small or late turn, shoulders and hips move together.
+13-19: visible coil and uncoil with imperfect timing or range.
+20-25: clear hip-led rotation transmitting power into the stroke.
+
+### recovery (0-25) - what happens after contact
+0-5: freezes in the follow-through, no reset.
+6-12: starts back late and never fully resets.
+13-19: returns to a ready stance but slowly or incompletely.
+20-25: quick, relaxed reset to a neutral ready position.
+
+## Calibration rules
+- Score ONLY from visible evidence, using the anchors above literally. A visibly better swing MUST land in a higher band than a poorer one.
+- The 20-25 band is RESERVED for technique a coach would call advanced for a junior player. Most real practice clips - including solid ones - belong in 12-19. Never place all four dimensions in 20-25 by default.
+- If you name a technical flaw in "improvements", the dimension it affects CANNOT be scored in the 20-25 band. Your numbers must agree with your own written feedback.
+- Spread the four scores when the evidence differs. Giving all four dimensions the same value is only acceptable if the performance really is equally strong or weak in every respect.
+- Overall calibration: several visible flaws but a recognisable, complete stroke is roughly 45-65; a clearly better-than-average clip roughly 65-80; genuinely advanced technique roughly 80-95. Do not compress every clip toward a middle value, and do not inflate every clip toward a perfect score.
+- If a dimension genuinely cannot be judged from these frames, give 10-14 and say so in the feedback rather than assuming the worst.
+- Only a clip that is not table tennis practice at all gets 0 in every dimension.
+- "strengths" and "improvements" must each cite a specific observation or frame number, not generic coaching advice. 1-3 short bullets each.
+- All returned text must be English only. Never use Chinese characters.
+- "highlightFrame" is the single frame that best shows the stroke (prefer ball contact); an integer from 1 to ${frameCount}.
 
 Return valid JSON only. No markdown, no explanation, no extra text.
 {
-  "score": <integer from 0 to 100, sum of the four dimensions>,
-  "strengths": ["1-3 short English bullet points about what was done well. Use 'No clear strengths yet' if needed."],
-  "improvements": ["1-3 short English bullet points describing the most important technical fixes."],
-  "highlightFrame": <integer from 1 to the number of frames you were given>
+  "frameNotes": ["Frame 1: ...", "... exactly ${frameCount} strings"],
+  "dimensions": {"stroke": <0-25>, "posture": <0-25>, "rotation": <0-25>, "recovery": <0-25>},
+  "score": <integer, MUST equal the sum of the four dimensions>,
+  "strengths": ["1-3 short English bullets citing a frame or observation"],
+  "improvements": ["1-3 short English bullets citing a frame or observation"],
+  "highlightFrame": <integer from 1 to ${frameCount}>
 }`;
+}
+
+function parseDimensions(raw: unknown): ScoreDimensions | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const result = {} as ScoreDimensions;
+  for (const key of DIMENSION_KEYS) {
+    const value = Number(source[key]);
+    if (!Number.isFinite(value)) return null;
+    result[key] = Math.max(0, Math.min(25, Math.round(value)));
+  }
+  return result;
+}
+
+function parseFrameNotes(raw: unknown, frameCount: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .slice(0, frameCount);
+}
 
 function containsCjkText(value: unknown): boolean {
   return typeof value === 'string' && /[\u3400-\u9fff]/.test(value);
@@ -290,19 +340,8 @@ function containsCjkText(value: unknown): boolean {
 
 async function ensureEnglishFeedback(
   client: OpenAI,
-  analysis: {
-    score: number;
-    strengths: string[];
-    improvements: string[];
-    highlightFrame: number;
-  }
-): Promise<{
-  score: number;
-  strengths: string[];
-  improvements: string[];
-  highlightFrame: number;
-}> {
-  const highlightFrame = analysis.highlightFrame;
+  analysis: QwenAnalysis
+): Promise<QwenAnalysis> {
   const hasNonEnglishFeedback =
     analysis.strengths.some(containsCjkText) || analysis.improvements.some(containsCjkText);
 
@@ -341,13 +380,14 @@ async function ensureEnglishFeedback(
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
+  // Keep the computed score: the translation pass must never break the
+  // invariant that score === sum(dimensions).
   return {
-    score: Math.max(0, Math.min(100, Math.round(Number(parsed.score ?? analysis.score)))),
+    ...analysis,
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : analysis.strengths,
     improvements: Array.isArray(parsed.improvements)
       ? parsed.improvements
       : analysis.improvements,
-    highlightFrame,
   };
 }
 
@@ -363,12 +403,7 @@ function pickHighlightFrame(raw: unknown, frameCount: number): number {
   return index;
 }
 
-async function analyzeWithQwen(framePaths: string[]): Promise<{
-  score: number;
-  strengths: string[];
-  improvements: string[];
-  highlightFrame: number;
-}> {
+async function analyzeWithQwen(framePaths: string[]): Promise<QwenAnalysis> {
   const client = getClient();
   type ImageUrlContent = { type: 'image_url'; image_url: { url: string } };
   type TextContent = { type: 'text'; text: string };
@@ -384,13 +419,14 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
 
   const content: ContentItem[] = [
     ...imageContents,
-    { type: 'text', text: COACHING_PROMPT },
+    { type: 'text', text: buildCoachingPrompt(framePaths.length) },
   ];
 
   const response = await client.chat.completions.create({
     model: QWEN_VL_MODEL,
     messages: [{ role: 'user', content: content as OpenAI.ChatCompletionContentPart[] }],
-    max_tokens: 1024,
+    // Nine frame notes plus dimension scores need more headroom than the old 1024.
+    max_tokens: 2048,
   });
 
   const text = response.choices[0]?.message?.content ?? '';
@@ -401,11 +437,20 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   }
 
   const parsed = JSON.parse(jsonMatch[0]);
+  const dimensions = parseDimensions(parsed.dimensions);
+  // The model's free-form total used to collapse every clip into the 50s.
+  // When dimensions are present the total is computed here, never trusted.
+  const score = dimensions
+    ? DIMENSION_KEYS.reduce((total, key) => total + dimensions[key], 0)
+    : Math.max(0, Math.min(100, Math.round(Number(parsed.score) || 0)));
+
   return ensureEnglishFeedback(client, {
-    score: Math.max(0, Math.min(100, Math.round(Number(parsed.score)))),
+    score,
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
     improvements: Array.isArray(parsed.improvements) ? parsed.improvements : [],
     highlightFrame: pickHighlightFrame(parsed.highlightFrame, framePaths.length),
+    dimensions,
+    frameNotes: parseFrameNotes(parsed.frameNotes, framePaths.length),
   });
 }
 
@@ -608,6 +653,7 @@ router.post('/session/:sessionId/select', async (req: Request, res: Response): P
     }
   } catch (err) {
     console.error('Targeted analysis failed:', err);
+    if (res.headersSent) return;
     const { statusCode, message } = getUploadErrorResponse(err);
     res.status(statusCode).json({ error: message });
   }

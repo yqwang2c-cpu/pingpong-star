@@ -22,6 +22,7 @@ import type {
   AnalyzeSessionPreview,
   LeaderboardPlacement,
   PersonalStanding,
+  ScoreDimensions,
 } from '../types/analysis';
 import { SERVER_URL } from '../config/api';
 import {
@@ -64,12 +65,34 @@ function getReadableErrorMessage(error: unknown): string {
   return 'Analysis failed. Please try again.';
 }
 
+const DIMENSION_KEYS: (keyof ScoreDimensions)[] = ['stroke', 'posture', 'rotation', 'recovery'];
+
+function parseDimensions(raw: unknown): ScoreDimensions | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const dimensions = {} as ScoreDimensions;
+  for (const key of DIMENSION_KEYS) {
+    const value = source[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+    dimensions[key] = Math.max(0, Math.min(25, Math.round(value)));
+  }
+  return dimensions;
+}
+
 function parseAnalysisResult(data: Record<string, unknown> | null): AnalysisResult {
   return {
     frames: Array.isArray(data?.frames) ? (data.frames as string[]) : [],
     score: typeof data?.score === 'number' ? data.score : 0,
     strengths: Array.isArray(data?.strengths) ? (data.strengths as string[]) : [],
     improvements: Array.isArray(data?.improvements) ? (data.improvements as string[]) : [],
+    // Results cached before the v2 rubric simply have neither field; the
+    // result screen then hides the breakdown instead of showing zeros.
+    dimensions: parseDimensions(data?.dimensions),
+    frameNotes: Array.isArray(data?.frameNotes)
+      ? (data.frameNotes as unknown[]).filter(
+          (note): note is string => typeof note === 'string' && note.trim().length > 0
+        )
+      : [],
   };
 }
 

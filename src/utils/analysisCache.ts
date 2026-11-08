@@ -1,8 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import type { AnalysisResult } from '../types/analysis';
 
-const CACHE_VERSION = 1 as const;
-const CACHE_FILENAME = 'analysis-cache-v1.json';
+// v2: the scoring rubric changed to per-dimension scoring over more frames.
+// Bumping both the version and the filename drops stored v1 low-resolution
+// results so a re-upload is scored again instead of replaying an old total.
+const CACHE_VERSION = 2 as const;
+const CACHE_FILENAME = 'analysis-cache-v2.json';
 const CACHE_PATH = `${FileSystem.documentDirectory ?? ''}${CACHE_FILENAME}`;
 const MAX_ENTRIES = 40;
 

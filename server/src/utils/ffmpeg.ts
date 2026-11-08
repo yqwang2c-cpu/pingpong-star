@@ -26,33 +26,44 @@ function ensureFramesDir() {
   }
 }
 
-export function extractFrames(videoPath: string, outputPrefix: string): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    ensureFramesDir();
+/** Frames handed to the vision model. Enough to cover preparation -> contact -> follow-through -> recovery. */
+export const ANALYSIS_FRAME_COUNT = 9;
 
-    const outputPattern = path.join(FRAMES_DIR, `${outputPrefix}_%03d.jpg`);
+export async function extractFrames(videoPath: string, outputPrefix: string): Promise<string[]> {
+  ensureFramesDir();
 
+  // Sample evenly across the WHOLE clip. A fixed `fps=1, frames=6` only ever
+  // showed the first few seconds (and just 3 frames for a typical 3s clip),
+  // which made waist rotation and recovery impossible to judge and silently
+  // dropped the tail of any longer video.
+  const info = await getMediaInfo(videoPath);
+  const duration = Math.max(
+    0.8,
+    Math.min(info.durationSeconds > 0 ? info.durationSeconds : 8, 10)
+  );
+  const fps = ANALYSIS_FRAME_COUNT / duration;
+  const outputPattern = path.join(FRAMES_DIR, `${outputPrefix}_%03d.jpg`);
+
+  await new Promise<void>((resolve, reject) => {
     ffmpeg(videoPath)
       .outputOptions([
-        // Sample one frame per second and scale down to reduce model cost.
-        '-vf', 'fps=1,scale=1280:-1',
-        '-frames:v', '6',
+        '-vf', `fps=${fps.toFixed(3)},scale=1280:-1`,
+        '-frames:v', String(ANALYSIS_FRAME_COUNT),
       ])
       .output(outputPattern)
-      .on('end', () => {
-        const frames: string[] = [];
-        for (let i = 1; i <= 6; i++) {
-          const filename = `${outputPrefix}_${String(i).padStart(3, '0')}.jpg`;
-          const fullPath = path.join(FRAMES_DIR, filename);
-          if (fs.existsSync(fullPath)) {
-            frames.push(filename);
-          }
-        }
-        resolve(frames);
-      })
+      .on('end', () => resolve())
       .on('error', reject)
       .run();
   });
+
+  const frames: string[] = [];
+  for (let i = 1; i <= ANALYSIS_FRAME_COUNT; i++) {
+    const filename = `${outputPrefix}_${String(i).padStart(3, '0')}.jpg`;
+    if (fs.existsSync(path.join(FRAMES_DIR, filename))) {
+      frames.push(filename);
+    }
+  }
+  return frames;
 }
 
 export function getMediaDimensions(filePath: string): Promise<MediaDimensions> {

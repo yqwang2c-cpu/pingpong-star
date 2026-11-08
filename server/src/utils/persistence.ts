@@ -7,12 +7,22 @@ export interface PointSelection {
   y: number;
 }
 
+/** The four rubric dimensions, each scored 0-25. Kept here so routes and storage share one shape. */
+export interface ScoreDimensions {
+  stroke: number;
+  posture: number;
+  rotation: number;
+  recovery: number;
+}
+
 export interface AnalysisResultPayload {
   frames: string[];
   score: number;
   strengths: string[];
   improvements: string[];
   highlightFrame?: number;
+  dimensions?: ScoreDimensions | null;
+  frameNotes?: string[];
 }
 
 export interface ScoreEntry {
@@ -97,8 +107,16 @@ export function makePointKey(point: PointSelection): string {
   return `${x}:${y}`;
 }
 
+/**
+ * Versioned because the rubric changed to per-dimension scoring over a longer
+ * frame sequence. Without the prefix a re-upload of the same clip would keep
+ * serving the old low-resolution result from cache. Existing leaderboard rows
+ * keep their unprefixed keys, so their snapshots still resolve untouched.
+ */
+const ANALYSIS_KEY_VERSION = 'v2';
+
 export function makeAnalysisKey(videoHash: string, point: PointSelection): string {
-  return `${videoHash}:${makePointKey(point)}`;
+  return `${ANALYSIS_KEY_VERSION}:${videoHash}:${makePointKey(point)}`;
 }
 
 export function getScoresFilePath(): string {

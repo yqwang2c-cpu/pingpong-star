@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../types/navigation';
+import type { ScoreDimensions } from '../types/analysis';
 import { getVideoDurationLimitMessage, pickVideoFromLibrary } from '../utils/video';
 import { colors, fontSize, radius, space } from '../theme';
 
@@ -23,6 +24,13 @@ interface Props {
   navigation: ResultNavProp;
   route: ResultRouteProp;
 }
+
+const DIMENSION_ROWS: { key: keyof ScoreDimensions; label: string }[] = [
+  { key: 'stroke', label: 'Stroke' },
+  { key: 'posture', label: 'Posture' },
+  { key: 'rotation', label: 'Waist turn' },
+  { key: 'recovery', label: 'Recovery' },
+];
 
 const FIREWORK_PARTICLES = Array.from({ length: 24 }, (_, index) => {
   const burstIndex = index % 12;
@@ -183,6 +191,7 @@ export default function ResultScreen({ navigation, route }: Props) {
   const actionsTranslateY = useRef(new Animated.Value(26)).current;
   const scoreCounter = useRef(new Animated.Value(0)).current;
   const [displayScore, setDisplayScore] = React.useState(0);
+  const [showFrameNotes, setShowFrameNotes] = React.useState(false);
 
   const strengths = useMemo(
     () => (result.strengths.length > 0 ? result.strengths : ['Keep it up. Another clip will tell us more.']),
@@ -380,6 +389,27 @@ export default function ResultScreen({ navigation, route }: Props) {
             { opacity: feedbackOpacity, transform: [{ translateY: feedbackTranslateY }] },
           ]}
         >
+          {result.dimensions ? (
+            <View style={styles.feedbackCard}>
+              <Text style={styles.sectionTitle}>Score breakdown</Text>
+              <Text style={styles.breakdownHint}>Four skills, 25 points each</Text>
+              {DIMENSION_ROWS.map(({ key, label }) => {
+                const value = result.dimensions?.[key] ?? 0;
+                return (
+                  <View key={key} style={styles.dimensionRow}>
+                    <Text style={styles.dimensionLabel}>{label}</Text>
+                    <View style={styles.dimensionTrack}>
+                      <View
+                        style={[styles.dimensionFill, { width: `${(value / 25) * 100}%` }]}
+                      />
+                    </View>
+                    <Text style={styles.dimensionValue}>{value}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
+
           <View style={styles.feedbackCard}>
             <View style={styles.sectionHeader}>
               <View style={styles.checkBadge}>
@@ -407,6 +437,25 @@ export default function ResultScreen({ navigation, route }: Props) {
               </Text>
             ))}
           </View>
+
+          {result.frameNotes && result.frameNotes.length > 0 ? (
+            <View style={styles.feedbackCard}>
+              <TouchableOpacity
+                style={styles.notesHeader}
+                onPress={() => setShowFrameNotes((value) => !value)}
+              >
+                <Text style={styles.sectionTitle}>Frame-by-frame notes</Text>
+                <Text style={styles.notesToggle}>{showFrameNotes ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+              {showFrameNotes
+                ? result.frameNotes.map((note, index) => (
+                    <Text key={index} style={styles.bullet}>
+                      {note}
+                    </Text>
+                  ))
+                : null}
+            </View>
+          ) : null}
         </Animated.View>
 
         <Animated.View
@@ -571,6 +620,52 @@ const styles = StyleSheet.create({
   feedbackCardFocus: {
     borderLeftWidth: 3,
     borderLeftColor: colors.primarySoft,
+  },
+  breakdownHint: {
+    fontSize: fontSize.caption,
+    color: colors.muted,
+    marginTop: 2,
+    marginBottom: space.md,
+  },
+  dimensionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: space.sm,
+  },
+  dimensionLabel: {
+    width: 92,
+    fontSize: fontSize.body,
+    color: colors.body,
+  },
+  dimensionTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.hairline,
+    overflow: 'hidden',
+    marginRight: space.sm,
+  },
+  dimensionFill: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  dimensionValue: {
+    width: 24,
+    textAlign: 'right',
+    fontSize: fontSize.body,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  notesToggle: {
+    fontSize: fontSize.body,
+    fontWeight: '600',
+    color: colors.primary,
   },
   sectionHeader: {
     flexDirection: 'row',
