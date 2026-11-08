@@ -13,5 +13,7 @@ services:
     envVars:
       - key: DASHSCOPE_API_KEY
         sync: false
+      - key: QWEN_VL_MODEL
+        value: qwen3-vl-plus
       - key: SCORES_FILE
         value: /var/data/scores.json

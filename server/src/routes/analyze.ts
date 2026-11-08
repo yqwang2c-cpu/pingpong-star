@@ -53,6 +53,11 @@ const upload = multer({
 });
 const MAX_VIDEO_DURATION_SECONDS = 10;
 
+// DashScope retires model aliases over time (qwen-vl-max now returns
+// "Model not exist"). Keep the model configurable so the next rename is a
+// one-line env change on the host instead of a code change + redeploy.
+const QWEN_VL_MODEL = process.env.QWEN_VL_MODEL?.trim() || 'qwen3-vl-plus';
+
 interface AnalyzeSession {
   id: string;
   createdAt: number;
@@ -203,6 +208,30 @@ function getUploadErrorResponse(err: unknown): { statusCode: number; message: st
     };
   }
 
+  // The OpenAI SDK wraps upstream DashScope failures in an APIError whose
+  // message contains the vendor error text. Classify them so a retired model,
+  // a bad key or an exhausted quota does not degrade into a vague 500.
+  if (/model[_ ]not[_ ]found|model not exist|model not found/i.test(message)) {
+    return {
+      statusCode: 502,
+      message: 'The analysis model is no longer available. Please contact the app owner.',
+    };
+  }
+
+  if (/access denied|invalid api[-_ ]?key|incorrect api key|unauthorized/i.test(message)) {
+    return {
+      statusCode: 503,
+      message: 'The analysis service is not configured correctly. Please contact the app owner.',
+    };
+  }
+
+  if (/rate limit|quota|insufficient balance|throttl|timed? ?out|ETIMEDOUT/i.test(message)) {
+    return {
+      statusCode: 503,
+      message: 'The analysis service is busy or out of quota. Please try again later.',
+    };
+  }
+
   return {
     statusCode: 500,
     message: 'Analysis failed on the server. Please try again later.',
@@ -291,7 +320,7 @@ async function ensureEnglishFeedback(
   ].join('\n');
 
   const response = await client.chat.completions.create({
-    model: 'qwen-vl-max',
+    model: QWEN_VL_MODEL,
     messages: [
       {
         role: 'system',
@@ -359,7 +388,7 @@ async function analyzeWithQwen(framePaths: string[]): Promise<{
   ];
 
   const response = await client.chat.completions.create({
-    model: 'qwen-vl-max',
+    model: QWEN_VL_MODEL,
     messages: [{ role: 'user', content: content as OpenAI.ChatCompletionContentPart[] }],
     max_tokens: 1024,
   });
